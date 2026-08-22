@@ -62,15 +62,20 @@ class Slskd:
         r.raise_for_status()
         return r.json()
 
-    def search(self, text: str, wait: float = 40.0, poll: float = 3.0) -> list[dict[str, Any]]:
-        """Run a search and return its responses. Soulseek results trickle in with
-        pauses, so we wait until slskd marks the search Completed (its network
-        timeout, typically 15-30s) or `wait` elapses — never on a momentary stall."""
+    def search(self, text: str, wait: float = 45.0, floor: float = 30.0,
+               poll: float = 3.0) -> list[dict[str, Any]]:
+        """Run a search and return its responses. Soulseek responses trickle in
+        over ~30-60s — slow peers (often the ones holding a specific audiobook)
+        reply late. slskd marks a search 'Completed' as soon as its own network
+        timeout fires, which can be well before those late replies arrive, so we
+        keep collecting for at least `floor` seconds and only then honour the
+        Completed state, up to a hard `wait` ceiling."""
         sid = self.start_search(text)
-        deadline = time.time() + wait
-        while time.time() < deadline:
+        start = time.time()
+        while time.time() - start < wait:
             time.sleep(poll)
-            if "Completed" in self.search_state(sid).get("state", ""):
+            if (time.time() - start) >= floor and \
+               "Completed" in self.search_state(sid).get("state", ""):
                 break
         return self.search_responses(sid)
 

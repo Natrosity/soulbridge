@@ -70,7 +70,7 @@ def manual_search(title: str, author: str = "") -> list[dict[str, Any]]:
         prefs = matching.default_prefs(settings)
         responses: list[dict[str, Any]] = []
         for q in matching.build_queries(title, author):
-            responses = sk.search(q, wait=25)
+            responses = sk.search(q, wait=35, floor=20)
             groups = matching.group_responses(responses)
             if any(matching.score_group(g, title, author, prefs) > 0 for g in groups):
                 break
@@ -147,7 +147,7 @@ def process_item(item_id: int) -> None:
         prefs = matching.default_prefs(settings)
         best = None
         for q in matching.build_queries(title, author):
-            best = matching.pick_best(sk.search(q, wait=40), title, author, prefs)
+            best = matching.pick_best(sk.search(q), title, author, prefs)
             if best:
                 break
         if not best:
