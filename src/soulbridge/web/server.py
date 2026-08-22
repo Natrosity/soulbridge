@@ -125,6 +125,13 @@ def item_skip(item_id: int):
     return RedirectResponse("/", status_code=303)
 
 
+@app.get("/tags", response_class=HTMLResponse)
+def tags_page(request: Request):
+    return templates.TemplateResponse(request, "tags.html", _ctx(
+        request, writes=db.recent_tag_writes(100),
+    ))
+
+
 @app.get("/settings", response_class=HTMLResponse)
 def settings_page(request: Request, saved: int = 0):
     grouped: dict[str, list[Any]] = {g: [] for g in settings.groups()}

@@ -44,8 +44,18 @@ CREATE TABLE IF NOT EXISTS events (
     item_id   INTEGER,
     message   TEXT NOT NULL
 );
+CREATE TABLE IF NOT EXISTS tag_writes (
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    ts         TEXT NOT NULL,
+    item_id    INTEGER,
+    book_title TEXT,
+    file_name  TEXT,
+    cover      TEXT,
+    fields     TEXT NOT NULL DEFAULT '[]'   -- JSON: [{name, old, new, action}]
+);
 CREATE INDEX IF NOT EXISTS idx_items_status ON items(status);
 CREATE INDEX IF NOT EXISTS idx_events_ts ON events(ts);
+CREATE INDEX IF NOT EXISTS idx_tagwrites_ts ON tag_writes(id);
 """
 
 
@@ -172,3 +182,32 @@ def recent_events(limit: int = 100) -> list[dict[str, Any]]:
     with connect() as c:
         rows = c.execute("SELECT * FROM events ORDER BY id DESC LIMIT ?", (limit,)).fetchall()
         return [dict(r) for r in rows]
+
+
+# ---- tag writes ----
+def log_tag_write(item_id: Optional[int], book_title: str, file_name: str,
+                  cover: Optional[str], fields: list[dict[str, Any]]) -> None:
+    import json
+    with connect() as c:
+        c.execute(
+            "INSERT INTO tag_writes(ts,item_id,book_title,file_name,cover,fields) VALUES(?,?,?,?,?,?)",
+            (_now(), item_id, book_title, file_name, cover, json.dumps(fields)),
+        )
+        c.execute(
+            "DELETE FROM tag_writes WHERE id NOT IN (SELECT id FROM tag_writes ORDER BY id DESC LIMIT 500)"
+        )
+
+
+def recent_tag_writes(limit: int = 100) -> list[dict[str, Any]]:
+    import json
+    with connect() as c:
+        rows = c.execute("SELECT * FROM tag_writes ORDER BY id DESC LIMIT ?", (limit,)).fetchall()
+        out = []
+        for r in rows:
+            d = dict(r)
+            try:
+                d["fields"] = json.loads(d["fields"])
+            except Exception:
+                d["fields"] = []
+            out.append(d)
+        return out

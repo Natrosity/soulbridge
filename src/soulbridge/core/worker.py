@@ -12,12 +12,14 @@ import time
 from typing import Any, Optional
 
 from .. import db, settings
+from ..clients import audnexus
 from ..clients.abr import ABR
 from ..clients.abs import ABS
+from ..clients.audnexus import Audnexus
 from ..clients.jellyfin import Jellyfin
 from ..clients.plex import Plex
 from ..clients.slskd import Slskd
-from . import matching
+from . import matching, tagging
 
 STATUS: dict[str, Any] = {
     "running": False,
@@ -209,25 +211,73 @@ def _import(item: dict[str, Any]) -> None:
     root = settings.get("slskd_downloads_path")
     dest = dest_folder(item["title"], item.get("author") or "", item.get("narrator") or "")
     os.makedirs(dest, exist_ok=True)
-    moved = 0
+    moved_paths: list[str] = []
     for remote in json.loads(item.get("chosen_files") or "[]"):
         base = remote.rsplit("\\", 1)[-1]
         local = _find_local(base, root)
         if not local:
             continue
+        target = os.path.join(dest, base)
         try:
-            shutil.move(local, os.path.join(dest, base))
-            moved += 1
+            shutil.move(local, target)
+            moved_paths.append(target)
         except Exception as e:
             db.log_event(f"Move failed for {base}: {e}", "error", item["id"])
-    if moved == 0:
+    if not moved_paths:
         db.update_item(item["id"], status="failed",
                        error="download completed but no files found to import")
         db.log_event(f"Import found no files for '{item['title']}'", "error", item["id"])
         return
+    _write_metadata(item, dest, moved_paths)    # tag before the library scans run
     db.update_item(item["id"], status="done", dest_path=dest, error=None)
-    db.log_event(f"Imported '{item['title']}' → {dest} ({moved} file(s))", item_id=item["id"])
+    db.log_event(f"Imported '{item['title']}' → {dest} ({len(moved_paths)} file(s))",
+                 item_id=item["id"])
     _post_import(item, dest)
+
+
+def _write_metadata(item: dict[str, Any], dest: str, files: list[str]) -> None:
+    """Tag the imported files from the Audible listing (best-effort)."""
+    if not settings.get_bool("write_metadata"):
+        return
+    asin = item.get("source_id") if item.get("source") == "abr" else None
+    meta = None
+    cover_bytes = None
+    aud = Audnexus(settings.get("audible_region") or "us")
+    try:
+        if asin:
+            meta = audnexus.to_meta(aud.book(asin))
+        if not meta:                                 # fallback to what we already know
+            meta = {"title": item["title"],
+                    "authors": [item["author"]] if item.get("author") else [],
+                    "narrators": [item["narrator"]] if item.get("narrator") else [],
+                    "asin": asin}
+        if settings.get_bool("embed_cover") and meta.get("cover_url"):
+            cover_bytes = aud.fetch_bytes(meta["cover_url"])
+    finally:
+        aud.close()
+
+    cover_url = meta.get("cover_url") or item.get("cover")
+    overwrite = settings.get_bool("overwrite_tags")
+    embed = settings.get_bool("embed_cover")
+    tagged = 0
+    for p in files:
+        try:
+            decisions = tagging.write_file(p, meta, cover_bytes, "image/jpeg", overwrite, embed)
+            if decisions:
+                db.log_tag_write(item["id"], meta.get("title") or item["title"],
+                                 os.path.basename(p), cover_url, decisions)
+                tagged += 1
+        except Exception as e:
+            db.log_event(f"Tagging failed for {os.path.basename(p)}: {e}", "warn", item["id"])
+    if cover_bytes and embed:
+        try:
+            with open(os.path.join(dest, "cover.jpg"), "wb") as f:
+                f.write(cover_bytes)
+        except Exception:
+            pass
+    if tagged:
+        src = "Audible" if asin and meta.get("asin") else "request data"
+        db.log_event(f"Tagged {tagged} file(s) from {src}", item_id=item["id"])
 
 
 def _post_import(item: dict[str, Any], dest: str) -> None:

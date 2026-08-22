@@ -65,6 +65,15 @@ SPEC: list[Field] = [
           help="Reject tiny files (samples, single tracks, wrong matches). Full "
                "audiobooks are usually 50MB+."),
     Field("max_size_mb", "Maximum size (MB)", "4000", "Behaviour", "number"),
+    # Metadata tagging (Audible via Audnexus)
+    Field("write_metadata", "Tag files from Audible", "true", "Metadata", "bool",
+          help="After download, write tags + cover from the Audible listing (Audnexus)."),
+    Field("embed_cover", "Embed cover art", "true", "Metadata", "bool"),
+    Field("overwrite_tags", "Replace tags when the new value is better", "true", "Metadata", "bool",
+          help="Always fills empty tags. When on, also replaces an existing tag if the new "
+               "value contains everything the old one did; otherwise the existing tag is kept."),
+    Field("audible_region", "Audible region", "us", "Metadata",
+          help="us, uk, de, fr, au, ca, in, it, es, jp."),
     Field("instance_name", "Instance name", "Soulbridge", "General"),
 ]
 

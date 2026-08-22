@@ -1,0 +1,37 @@
+{% extends "base.html" %}
+{% block title %}Tags · {{ instance }}{% endblock %}
+{% block content %}
+<section class="panel">
+  <h2>Tag writes <span class="muted">(from Audible)</span></h2>
+  {% if not writes %}
+    <p class="empty">No tag writes yet. When Soulbridge tags an imported file, each write shows up
+      here — every field, old value → new value.</p>
+  {% endif %}
+</section>
+
+{% for w in writes %}
+<div class="tagcard">
+  <div class="taghead">
+    <div class="tagtitle">{{ w.book_title }}</div>
+    <div class="tagfile">{{ w.file_name }} <span class="muted">· {{ w.ts.replace('T',' ') }} UTC</span></div>
+  </div>
+  <div class="tagbody">
+    {% if w.cover %}<img class="tagcover" src="{{ w.cover }}" alt="" loading="lazy">
+    {% else %}<div class="tagcover placeholder">♪</div>{% endif %}
+    <div class="tagfields">
+      {% for f in w.fields %}
+      <div class="tagfield act-{{ f.action }}">
+        <span class="fname">{{ f.name }}</span>
+        <span class="fvals">
+          <span class="fold">{{ f.old if f.old else '∅' }}</span>
+          <span class="farrow">→</span>
+          <span class="fnew">{{ f.new }}</span>
+        </span>
+        <span class="fbadge">{{ f.action }}</span>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+</div>
+{% endfor %}
+{% endblock %}
