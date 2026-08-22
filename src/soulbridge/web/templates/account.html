@@ -1,0 +1,26 @@
+{% extends "base.html" %}
+{% block title %}Account · {{ instance }}{% endblock %}
+{% block content %}
+<section class="panel">
+  <h2>Account</h2>
+  {% if saved %}<div class="saved">Saved.</div>{% endif %}
+  {% if error %}<div class="autherr">{{ error }}</div>{% endif %}
+  <div class="field"><label>Username</label><div class="control"><strong>{{ user.username }}</strong>
+    <small>Role: {{ user.role }}</small></div></div>
+</section>
+
+<section class="panel">
+  <h2>Change password</h2>
+  <form method="post" action="/account" class="settingsform" autocomplete="off">
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+    <div class="field"><label for="current">Current password</label>
+      <div class="control"><input type="password" id="current" name="current" autocomplete="current-password"></div></div>
+    <div class="field"><label for="password">New password</label>
+      <div class="control"><input type="password" id="password" name="password" autocomplete="new-password">
+        <small>At least 10 characters.</small></div></div>
+    <div class="field"><label for="confirm">Confirm new password</label>
+      <div class="control"><input type="password" id="confirm" name="confirm" autocomplete="new-password"></div></div>
+    <div class="formactions"><button class="btn primary" type="submit">Update password</button></div>
+  </form>
+</section>
+{% endblock %}

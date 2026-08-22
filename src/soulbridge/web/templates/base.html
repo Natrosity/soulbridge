@@ -11,28 +11,35 @@
 </head>
 <body>
 <header class="topbar">
-  <a class="brand" href="/">
-    <span class="brand-mark">◈</span> {{ instance }}
-  </a>
+  <a class="brand" href="/"><span class="brand-mark">◈</span> {{ instance }}</a>
+  {% if user %}
   <nav>
-    <a href="/">Dashboard</a>
-    <a href="/search">Search</a>
+    {% if is_admin %}<a href="/">Dashboard</a><a href="/search">Search</a>{% endif %}
     {% if library_available %}<a href="/library">Library</a>{% endif %}
-    <a href="/tags">Tags</a>
-    <a href="/settings">Settings</a>
+    {% if is_admin %}<a href="/tags">Tags</a>{% endif %}
   </nav>
-  <div class="statusstrip">
-    <span id="sb-worker" class="dot {{ 'on' if wstatus.running else 'off' }}" title="worker"></span>
-    <span id="sb-slskd" class="pill {{ 'ok' if wstatus.slskd_connected else 'err' }}">Soulseek</span>
-    <span id="sb-abr" class="pill {{ 'ok' if wstatus.abr_connected else 'muted' }}">ABR</span>
-    {% if wstatus.abs_connected is not none %}
-      <span id="sb-abs" class="pill {{ 'ok' if wstatus.abs_connected else 'err' }}">ABS</span>{% endif %}
-    {% if wstatus.plex_connected is not none %}
-      <span id="sb-plex" class="pill {{ 'ok' if wstatus.plex_connected else 'err' }}">Plex</span>{% endif %}
-    {% if wstatus.jellyfin_connected is not none %}
-      <span id="sb-jellyfin" class="pill {{ 'ok' if wstatus.jellyfin_connected else 'err' }}">Jellyfin</span>{% endif %}
-    <span id="sb-poll" class="poll">{{ wstatus.last_poll or '—' }}</span>
+  <div class="topright">
+    {% if is_admin %}
+    <div class="statusstrip">
+      <span id="sb-worker" class="dot {{ 'on' if wstatus.running else 'off' }}" title="worker"></span>
+      <span id="sb-slskd" class="pill {{ 'ok' if wstatus.slskd_connected else 'err' }}">Soulseek</span>
+      <span id="sb-abr" class="pill {{ 'ok' if wstatus.abr_connected else 'muted' }}">ABR</span>
+      {% if wstatus.abs_connected is not none %}<span id="sb-abs" class="pill {{ 'ok' if wstatus.abs_connected else 'err' }}">ABS</span>{% endif %}
+      {% if wstatus.plex_connected is not none %}<span id="sb-plex" class="pill {{ 'ok' if wstatus.plex_connected else 'err' }}">Plex</span>{% endif %}
+      {% if wstatus.jellyfin_connected is not none %}<span id="sb-jellyfin" class="pill {{ 'ok' if wstatus.jellyfin_connected else 'err' }}">Jellyfin</span>{% endif %}
+      <span id="sb-poll" class="poll">{{ wstatus.last_poll or '—' }}</span>
+    </div>
+    {% endif %}
+    <div class="usermenu">
+      {% if is_admin %}<a href="/settings">Server&nbsp;Settings</a><a href="/users">Users</a>{% endif %}
+      <a href="/account" class="who">{{ user.username }}</a>
+      <form method="post" action="/logout" class="logout">
+        <input type="hidden" name="csrf" value="{{ csrf }}">
+        <button class="btn ghost sm" type="submit">Log&nbsp;out</button>
+      </form>
+    </div>
   </div>
+  {% endif %}
 </header>
 <main class="{% block main_class %}{% endblock %}">
   {% block content %}{% endblock %}
@@ -41,34 +48,6 @@
   <span>Soulbridge v{{ version }}</span>
   <span>request audiobooks &middot; fulfil from Soulseek</span>
 </footer>
-<script>
-// Keep the top-right status strip live on every page.
-(function () {
-  function pill(id, state) {           // state: true=ok, false=err, null=muted
-    var el = document.getElementById(id);
-    if (!el) return;
-    el.classList.remove('ok', 'err', 'muted');
-    el.classList.add(state === true ? 'ok' : state === false ? 'err' : 'muted');
-  }
-  async function poll() {
-    if (document.hidden) return;
-    try {
-      var r = await fetch('/api/status', {cache: 'no-store'});
-      if (!r.ok) return;
-      var w = (await r.json()).worker || {};
-      var dot = document.getElementById('sb-worker');
-      if (dot) { dot.classList.toggle('on', !!w.running); dot.classList.toggle('off', !w.running); }
-      pill('sb-slskd', !!w.slskd_connected);
-      pill('sb-abr', w.abr_connected ? true : null);
-      pill('sb-abs', w.abs_connected);
-      pill('sb-plex', w.plex_connected);
-      pill('sb-jellyfin', w.jellyfin_connected);
-      var p = document.getElementById('sb-poll');
-      if (p && w.last_poll) p.textContent = w.last_poll;
-    } catch (e) { /* transient */ }
-  }
-  setInterval(poll, 5000);
-})();
-</script>
+<script src="/static/app.js?v={{ version }}" defer></script>
 </body>
 </html>

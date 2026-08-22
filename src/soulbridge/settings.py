@@ -74,10 +74,20 @@ SPEC: list[Field] = [
                "value contains everything the old one did; otherwise the existing tag is kept."),
     Field("audible_region", "Audible region", "us", "Metadata",
           help="us, uk, de, fr, au, ca, in, it, es, jp."),
+    # Access / users
+    Field("default_role", "Default role for new users", "standard", "Access",
+          help="'standard' (requests need admin approval) or 'trusted' (auto-download)."),
+    Field("request_quota", "Request quota per user", "0", "Access", "number",
+          help="Max open requests a non-admin may have. 0 = unlimited."),
     Field("instance_name", "Instance name", "Soulbridge", "General"),
 ]
 
 _BY_KEY = {f.key: f for f in SPEC}
+
+
+def is_secret(key: str) -> bool:
+    f = _BY_KEY.get(key)
+    return bool(f and f.type == "password")
 
 
 def seed_from_env() -> None:

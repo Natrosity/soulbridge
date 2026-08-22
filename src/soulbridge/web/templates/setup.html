@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+{% block title %}Set up · {{ instance }}{% endblock %}
+{% block content %}
+<div class="authwrap">
+  <div class="authcard">
+    <div class="authlogo"><img src="/static/apple-touch-icon.png" alt="" width="56" height="56"></div>
+    <h1>Welcome to Soulbridge</h1>
+    <p class="muted">Create the admin account to get started.</p>
+    {% if error %}<div class="autherr">{{ error }}</div>{% endif %}
+    <form method="post" action="/setup">
+      <input type="hidden" name="csrf" value="{{ csrf }}">
+      <label>Username
+        <input type="text" name="username" autocomplete="username" autofocus required>
+      </label>
+      <label>Password <span class="muted">(min 10 characters)</span>
+        <input type="password" name="password" autocomplete="new-password" required>
+      </label>
+      <label>Confirm password
+        <input type="password" name="confirm" autocomplete="new-password" required>
+      </label>
+      <button class="btn primary" type="submit">Create admin account</button>
+    </form>
+  </div>
+</div>
+{% endblock %}

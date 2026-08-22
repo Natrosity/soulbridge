@@ -1,10 +1,11 @@
 {% extends "base.html" %}
-{% block title %}Settings · {{ instance }}{% endblock %}
+{% block title %}Server Settings · {{ instance }}{% endblock %}
 {% block content %}
 <section class="panel">
-  <h2>Settings</h2>
+  <h2>Server Settings <span class="muted">(admin)</span></h2>
   {% if saved %}<div class="saved">Saved. The worker picked up your changes.</div>{% endif %}
-  <form method="post" action="/settings" class="settingsform">
+  <form method="post" action="/settings" class="settingsform" autocomplete="off">
+    <input type="hidden" name="csrf" value="{{ csrf }}">
     {% for group, fields in grouped.items() %}
     <fieldset>
       <legend>{{ group }}</legend>
@@ -16,7 +17,9 @@
             {% if f.type == 'bool' %}
               <input type="checkbox" id="{{ f.key }}" name="{{ f.key }}" {{ 'checked' if row.value in ('true','1','yes','on') }}>
             {% elif f.type == 'password' %}
-              <input type="password" id="{{ f.key }}" name="{{ f.key }}" value="{{ row.value }}" autocomplete="off">
+              <input type="password" id="{{ f.key }}" name="{{ f.key }}" value=""
+                     autocomplete="new-password"
+                     placeholder="{{ '•••••••• configured — leave blank to keep' if row.is_set else 'not set' }}">
             {% elif f.type == 'number' %}
               <input type="number" id="{{ f.key }}" name="{{ f.key }}" value="{{ row.value }}">
             {% else %}
