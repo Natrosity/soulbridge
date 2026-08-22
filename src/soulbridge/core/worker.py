@@ -14,6 +14,8 @@ from typing import Any, Optional
 from .. import db, settings
 from ..clients.abr import ABR
 from ..clients.abs import ABS
+from ..clients.jellyfin import Jellyfin
+from ..clients.plex import Plex
 from ..clients.slskd import Slskd
 from . import matching
 
@@ -23,6 +25,9 @@ STATUS: dict[str, Any] = {
     "last_error": None,
     "slskd_connected": False,
     "abr_connected": False,
+    "abs_connected": None,        # None = not configured; True/False = reachable
+    "plex_connected": None,
+    "jellyfin_connected": None,
 }
 
 _stop = threading.Event()
@@ -222,10 +227,10 @@ def _import(item: dict[str, Any]) -> None:
         return
     db.update_item(item["id"], status="done", dest_path=dest, error=None)
     db.log_event(f"Imported '{item['title']}' → {dest} ({moved} file(s))", item_id=item["id"])
-    _post_import(item)
+    _post_import(item, dest)
 
 
-def _post_import(item: dict[str, Any]) -> None:
+def _post_import(item: dict[str, Any], dest: str) -> None:
     # mark the ABR request fulfilled
     if item.get("source") == "abr" and item.get("source_id") and settings.get("abr_api_key"):
         try:
@@ -234,14 +239,34 @@ def _post_import(item: dict[str, Any]) -> None:
             abr.close()
         except Exception:
             pass
-    # nudge Audiobookshelf to scan (it also watches the folder)
+    # trigger media-server scans (best-effort; targeted to the new folder where possible)
+    scanned: list[str] = []
     if settings.get("abs_url") and settings.get("abs_library_id"):
         try:
             a = ABS(settings.get("abs_url"), settings.get("abs_api_key"))
-            a.scan(settings.get("abs_library_id"))
+            if a.scan(settings.get("abs_library_id")):
+                scanned.append("Audiobookshelf")
             a.close()
         except Exception:
             pass
+    if settings.get("plex_url") and settings.get("plex_token") and settings.get("plex_library_section_id"):
+        try:
+            p = Plex(settings.get("plex_url"), settings.get("plex_token"))
+            if p.scan(settings.get("plex_library_section_id"), dest):
+                scanned.append("Plex")
+            p.close()
+        except Exception:
+            pass
+    if settings.get("jellyfin_url") and settings.get("jellyfin_api_key"):
+        try:
+            j = Jellyfin(settings.get("jellyfin_url"), settings.get("jellyfin_api_key"))
+            if j.scan(dest):
+                scanned.append("Jellyfin")
+            j.close()
+        except Exception:
+            pass
+    if scanned:
+        db.log_event("Triggered scan: " + ", ".join(scanned), item_id=item["id"])
 
 
 # ---------- loop ----------
@@ -275,12 +300,37 @@ def _discover_requests() -> None:
         abr.close()
 
 
+def _update_connectivity() -> None:
+    """Refresh cached reachability for optional media servers (shown in the UI).
+    None means 'not configured' so the UI can hide the indicator entirely."""
+    if settings.get("abs_url") and settings.get("abs_api_key"):
+        a = ABS(settings.get("abs_url"), settings.get("abs_api_key"))
+        STATUS["abs_connected"] = a.ping(); a.close()
+    else:
+        STATUS["abs_connected"] = None
+    if settings.get("plex_url") and settings.get("plex_token"):
+        p = Plex(settings.get("plex_url"), settings.get("plex_token"))
+        STATUS["plex_connected"] = p.ping(); p.close()
+    else:
+        STATUS["plex_connected"] = None
+    if settings.get("jellyfin_url") and settings.get("jellyfin_api_key"):
+        j = Jellyfin(settings.get("jellyfin_url"), settings.get("jellyfin_api_key"))
+        STATUS["jellyfin_connected"] = j.ping(); j.close()
+    else:
+        STATUS["jellyfin_connected"] = None
+
+
 def tick() -> None:
     sk = _slskd()
     try:
         STATUS["slskd_connected"] = sk.is_connected()
     except Exception:
         STATUS["slskd_connected"] = False
+
+    try:
+        _update_connectivity()
+    except Exception:
+        pass
 
     _discover_requests()
 

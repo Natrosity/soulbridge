@@ -42,6 +42,18 @@ SPEC: list[Field] = [
           help="Optional. If set, Soulbridge triggers a library scan after import."),
     Field("abs_api_key", "Audiobookshelf API token", "", "Audiobookshelf", "password"),
     Field("abs_library_id", "Audiobookshelf library id", "", "Audiobookshelf"),
+    # Plex scan (optional) — Plex can scan just the new folder
+    Field("plex_url", "Plex URL", "", "Plex",
+          help="Optional. e.g. http://plex:32400. Triggers a targeted folder scan after import."),
+    Field("plex_token", "Plex token", "", "Plex", "password",
+          help="X-Plex-Token. Find it in any item's 'Get Info > View XML' URL."),
+    Field("plex_library_section_id", "Plex library section id", "", "Plex",
+          help="The audiobook library's section id (a number, e.g. 5)."),
+    # Jellyfin scan (optional)
+    Field("jellyfin_url", "Jellyfin URL", "", "Jellyfin",
+          help="Optional. e.g. http://jellyfin:8096. Triggers a library scan after import."),
+    Field("jellyfin_api_key", "Jellyfin API key", "", "Jellyfin", "password",
+          help="Dashboard > API Keys."),
     # Behaviour
     Field("auto_download", "Auto-download requests", "true", "Behaviour", "bool",
           help="When on, approved ABR requests are searched and grabbed automatically."),

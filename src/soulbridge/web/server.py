@@ -48,15 +48,24 @@ def _ctx(request: Request, **extra: Any) -> dict[str, Any]:
     return ctx
 
 
+def _dashboard_ctx(request: Request) -> dict[str, Any]:
+    return _ctx(
+        request,
+        active=db.list_items(statuses=["pending", "searching", "downloading", "importing"]),
+        attention=db.list_items(statuses=["no_results", "failed"]),
+        done=db.list_items(statuses=["done"], limit=30),
+        counts=db.counts_by_status(), events=db.recent_events(50),
+    )
+
+
 @app.get("/", response_class=HTMLResponse)
 def dashboard(request: Request):
-    active = db.list_items(statuses=["pending", "searching", "downloading", "importing"])
-    attention = db.list_items(statuses=["no_results", "failed"])
-    done = db.list_items(statuses=["done"], limit=30)
-    return templates.TemplateResponse(request, "dashboard.html", _ctx(
-        request, active=active, attention=attention, done=done,
-        counts=db.counts_by_status(), events=db.recent_events(40),
-    ))
+    return templates.TemplateResponse(request, "dashboard.html", _dashboard_ctx(request))
+
+
+@app.get("/partials/dashboard", response_class=HTMLResponse)
+def dashboard_partial(request: Request):
+    return templates.TemplateResponse(request, "_dashboard_body.html", _dashboard_ctx(request))
 
 
 @app.get("/search", response_class=HTMLResponse)

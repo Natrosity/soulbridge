@@ -40,9 +40,11 @@ AudioBookRequest ─►  Soulbridge  ─►  slskd (Soulseek)
   format & size preferences, single-file-M4B bias, free-slot awareness.
 - 🤝 **AudioBookRequest integration** — polls approved requests, marks them downloaded.
 - 🗂 **Self-organising** — files into `{author}/{title}` (configurable); no Readarr needed.
-- 🖥 **Web UI** — dashboard, manual search & grab, live activity log, settings — no config
-  files required (though env-var seeding is supported).
-- 📚 **Audiobookshelf-aware** — optional post-import library scan.
+- 🖥 **Web UI** — live-updating dashboard, manual search & grab, activity log, settings — no
+  config files required (though env-var seeding is supported).
+- 📚 **Media-server scans** — optional targeted scan after import for **Plex** (just the new
+  folder, not the whole library), **Jellyfin**, and **Audiobookshelf**, with live connection
+  indicators for each.
 - 🪶 **Lightweight** — FastAPI + SQLite, single container.
 
 ## Quick start
@@ -78,7 +80,9 @@ first run.
 | `folder_template` | `{author}/{title}` | `{author} {title} {narrator}` placeholders |
 | `auto_download` | `true` | Auto-grab approved requests |
 | `preferred_formats` | `m4b,m4a,mp3,flac,ogg` | Priority order |
-| `min_size_mb` / `max_size_mb` | `20` / `4000` | Sanity bounds |
+| `min_size_mb` / `max_size_mb` | `50` / `4000` | Sanity bounds |
+| `plex_url` / `plex_token` / `plex_library_section_id` | — | Optional: targeted folder scan after import |
+| `jellyfin_url` / `jellyfin_api_key` | — | Optional: library scan after import |
 
 ## Status
 

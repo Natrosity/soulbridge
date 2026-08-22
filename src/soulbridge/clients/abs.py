@@ -15,6 +15,18 @@ class ABS:
     def close(self) -> None:
         self._c.close()
 
+    @property
+    def configured(self) -> bool:
+        return bool(self.base and self._c.headers.get("Authorization"))
+
+    def ping(self) -> bool:
+        if not self.configured:
+            return False
+        try:
+            return self._c.get(self.base + "/api/libraries").status_code < 400
+        except Exception:
+            return False
+
     def scan(self, library_id: str) -> bool:
         if not (self.base and library_id):
             return False
