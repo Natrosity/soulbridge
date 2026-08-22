@@ -18,35 +18,32 @@
     {% if library_available %}<a href="/library">Library</a>{% endif %}
     {% if is_admin %}<a href="/tags">Tags</a>{% endif %}
   </nav>
-  <div class="topright">
-    {% if is_admin %}
-    <div class="statusstrip">
-      <span id="sb-worker" class="dot {{ 'on' if wstatus.running else 'off' }}" title="worker"></span>
-      <span id="sb-slskd" class="pill {{ 'ok' if wstatus.slskd_connected else 'err' }}">Soulseek</span>
-      <span id="sb-abr" class="pill {{ 'ok' if wstatus.abr_connected else 'muted' }}">ABR</span>
-      {% if wstatus.abs_connected is not none %}<span id="sb-abs" class="pill {{ 'ok' if wstatus.abs_connected else 'err' }}">ABS</span>{% endif %}
-      {% if wstatus.plex_connected is not none %}<span id="sb-plex" class="pill {{ 'ok' if wstatus.plex_connected else 'err' }}">Plex</span>{% endif %}
-      {% if wstatus.jellyfin_connected is not none %}<span id="sb-jellyfin" class="pill {{ 'ok' if wstatus.jellyfin_connected else 'err' }}">Jellyfin</span>{% endif %}
-      <span id="sb-poll" class="poll">{{ wstatus.last_poll or '—' }}</span>
-    </div>
-    {% endif %}
-    <div class="usermenu">
-      {% if is_admin %}<a href="/settings">Server&nbsp;Settings</a><a href="/users">Users</a>{% endif %}
-      <a href="/account" class="who">{{ user.username }}</a>
-      <form method="post" action="/logout" class="logout">
-        <input type="hidden" name="csrf" value="{{ csrf }}">
-        <button class="btn ghost sm" type="submit">Log&nbsp;out</button>
-      </form>
-    </div>
+  <div class="usermenu">
+    {% if is_admin %}<a href="/settings">Server&nbsp;Settings</a><a href="/users">Users</a>{% endif %}
+    <a href="/account" class="who">{{ user.username }}</a>
+    <form method="post" action="/logout" class="logout">
+      <input type="hidden" name="csrf" value="{{ csrf }}">
+      <button class="btn ghost sm" type="submit">Log&nbsp;out</button>
+    </form>
   </div>
   {% endif %}
 </header>
 <main class="{% block main_class %}{% endblock %}">
   {% block content %}{% endblock %}
 </main>
-<footer>
-  <span>Soulbridge v{{ version }}</span>
-  <span>request audiobooks &middot; fulfil from Soulseek</span>
+<footer class="bottombar">
+  <span class="foot-brand">Soulbridge v{{ version }} &middot; request audiobooks, fulfil from Soulseek</span>
+  {% if user and is_admin %}
+  <div class="statusstrip">
+    <span id="sb-worker" class="dot {{ 'on' if wstatus.running else 'off' }}" title="worker"></span>
+    <span id="sb-slskd" class="pill {{ 'ok' if wstatus.slskd_connected else 'err' }}">Soulseek</span>
+    <span id="sb-abr" class="pill {{ 'ok' if wstatus.abr_connected else 'muted' }}">ABR</span>
+    {% if wstatus.abs_connected is not none %}<span id="sb-abs" class="pill {{ 'ok' if wstatus.abs_connected else 'err' }}">ABS</span>{% endif %}
+    {% if wstatus.plex_connected is not none %}<span id="sb-plex" class="pill {{ 'ok' if wstatus.plex_connected else 'err' }}">Plex</span>{% endif %}
+    {% if wstatus.jellyfin_connected is not none %}<span id="sb-jellyfin" class="pill {{ 'ok' if wstatus.jellyfin_connected else 'err' }}">Jellyfin</span>{% endif %}
+    <span id="sb-poll" class="poll">{{ wstatus.last_poll or '—' }}</span>
+  </div>
+  {% endif %}
 </footer>
 <script src="/static/app.js?v={{ version }}" defer></script>
 </body>

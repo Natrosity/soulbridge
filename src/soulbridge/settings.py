@@ -15,8 +15,9 @@ class Field:
     label: str
     default: str
     group: str
-    type: str = "text"          # text | password | bool | number | textarea
+    type: str = "text"          # text | password | bool | number | textarea | select
     help: str = ""
+    options: tuple = ()          # for type == "select"
 
 
 SPEC: list[Field] = [
@@ -75,8 +76,9 @@ SPEC: list[Field] = [
     Field("audible_region", "Audible region", "us", "Metadata",
           help="us, uk, de, fr, au, ca, in, it, es, jp."),
     # Access / users
-    Field("default_role", "Default role for new users", "standard", "Access",
-          help="'standard' (requests need admin approval) or 'trusted' (auto-download)."),
+    Field("default_role", "Default role for new users", "standard", "Access", "select",
+          help="'standard' (requests need admin approval) or 'trusted' (auto-download).",
+          options=("standard", "trusted")),
     Field("request_quota", "Request quota per user", "0", "Access", "number",
           help="Max open requests a non-admin may have. 0 = unlimited."),
     Field("instance_name", "Instance name", "Soulbridge", "General"),

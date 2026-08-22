@@ -24,7 +24,7 @@ a:hover { text-decoration: underline; }
 .topbar nav a:hover { color: var(--text); text-decoration: none; }
 .topright { margin-left: auto; display: flex; align-items: center; gap: 16px; }
 .statusstrip { display: flex; align-items: center; gap: 10px; font-size: 13px; }
-.usermenu { display: flex; align-items: center; gap: 14px; font-size: 13px; }
+.usermenu { margin-left: auto; display: flex; align-items: center; gap: 14px; font-size: 13px; }
 .usermenu a { color: var(--muted); }
 .usermenu a:hover { color: var(--text); text-decoration: none; }
 .usermenu .who { color: var(--text); font-weight: 600; }
@@ -208,7 +208,39 @@ main.wide { max-width: min(1240px, 95vw); }
 .ov-meta { font-size: 11px; opacity: .9; margin-top: 3px; letter-spacing: .01em; text-shadow: 0 1px 3px rgba(0,0,0,.85); }
 .pager { display: flex; align-items: center; justify-content: center; gap: 16px; margin: 8px 0 24px; }
 
-footer { max-width: 1000px; margin: 10px auto 40px; padding: 0 18px; display: flex; justify-content: space-between; color: var(--muted); font-size: 12px; }
+/* bottom toolbar (status indicators live here now) */
+body { padding-bottom: 46px; }
+.bottombar {
+  position: fixed; left: 0; right: 0; bottom: 0; z-index: 20; height: 40px;
+  display: flex; align-items: center; gap: 16px; padding: 0 18px;
+  background: #12151a; border-top: 1px solid var(--line); font-size: 12px; color: var(--muted);
+}
+.foot-brand { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.bottombar .statusstrip { margin-left: auto; }
+
+/* Server Settings layout */
+.settingslayout { display: grid; grid-template-columns: 190px 1fr; gap: 22px; align-items: start; }
+.settingsnav { position: sticky; top: 74px; align-self: start; }
+.settingsnav-title { font-weight: 600; font-size: 13px; color: var(--muted); text-transform: uppercase;
+  letter-spacing: .04em; margin: 0 0 8px 10px; }
+.settingsnav ul { list-style: none; margin: 0; padding: 0; }
+.settingsnav a { display: block; padding: 7px 10px; border-radius: 7px; color: var(--muted);
+  font-size: 13px; border-left: 2px solid transparent; }
+.settingsnav a:hover { color: var(--text); text-decoration: none; background: var(--panel2); }
+.settingsnav a.active { color: var(--text); border-left-color: var(--accent); background: var(--panel2); }
+.settingslayout .settingsform { padding-bottom: 90px; }
+.settingslayout fieldset { scroll-margin-top: 74px; }
+.settingsform select { padding: 8px 11px; border-radius: 8px; background: var(--panel2);
+  border: 1px solid var(--line); color: var(--text); font-size: 14px; }
+
+/* floating save button */
+.savefloat { position: fixed; left: 50%; bottom: 58px; transform: translateX(-50%); z-index: 25; }
+.savebtn { padding: 11px 26px; font-size: 14px; box-shadow: 0 6px 20px rgba(0,0,0,.45);
+  background: var(--panel2); border: 1px solid var(--line); color: var(--muted);
+  transition: background .2s, color .2s, border-color .2s, box-shadow .2s; }
+.savebtn.dirty { background: var(--ok); border-color: var(--ok); color: #06210d; font-weight: 600;
+  box-shadow: 0 0 18px rgba(63,185,80,.6); }
+@media (max-width: 720px) { .settingslayout { grid-template-columns: 1fr; } .settingsnav { display: none; } }
 
 @media (max-width: 640px) {
   .field { grid-template-columns: 1fr; }

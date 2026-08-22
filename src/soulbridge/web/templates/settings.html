@@ -1,13 +1,22 @@
 {% extends "base.html" %}
 {% block title %}Server Settings · {{ instance }}{% endblock %}
 {% block content %}
-<section class="panel">
-  <h2>Server Settings <span class="muted">(admin)</span></h2>
-  {% if saved %}<div class="saved">Saved. The worker picked up your changes.</div>{% endif %}
-  <form method="post" action="/settings" class="settingsform" autocomplete="off">
+{% if saved %}<div class="saved">Saved. The worker picked up your changes.</div>{% endif %}
+
+<div class="settingslayout">
+  <aside class="settingsnav">
+    <div class="settingsnav-title">Server Settings</div>
+    <ul>
+      {% for group in grouped %}
+      <li><a href="#g-{{ group | lower | replace(' ','-') }}" data-target="g-{{ group | lower | replace(' ','-') }}">{{ group }}</a></li>
+      {% endfor %}
+    </ul>
+  </aside>
+
+  <form method="post" action="/settings" class="settingsform" id="settingsform" autocomplete="off">
     <input type="hidden" name="csrf" value="{{ csrf }}">
     {% for group, fields in grouped.items() %}
-    <fieldset>
+    <fieldset id="g-{{ group | lower | replace(' ','-') }}">
       <legend>{{ group }}</legend>
       {% for row in fields %}
         {% set f = row.field %}
@@ -16,6 +25,10 @@
           <div class="control">
             {% if f.type == 'bool' %}
               <input type="checkbox" id="{{ f.key }}" name="{{ f.key }}" {{ 'checked' if row.value in ('true','1','yes','on') }}>
+            {% elif f.type == 'select' %}
+              <select id="{{ f.key }}" name="{{ f.key }}">
+                {% for opt in f.options %}<option value="{{ opt }}" {{ 'selected' if row.value == opt }}>{{ opt }}</option>{% endfor %}
+              </select>
             {% elif f.type == 'password' %}
               <input type="password" id="{{ f.key }}" name="{{ f.key }}" value=""
                      autocomplete="new-password"
@@ -31,7 +44,10 @@
       {% endfor %}
     </fieldset>
     {% endfor %}
-    <div class="formactions"><button class="btn primary" type="submit">Save settings</button></div>
   </form>
-</section>
+</div>
+
+<div class="savefloat">
+  <button form="settingsform" type="submit" id="savebtn" class="btn savebtn">Save settings</button>
+</div>
 {% endblock %}

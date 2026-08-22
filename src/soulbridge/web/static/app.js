@@ -39,4 +39,36 @@
 
   if (document.getElementById("sb-slskd")) setInterval(pollStatus, 5000);
   if (document.getElementById("dash")) setInterval(refreshDash, 5000);
+
+  // --- server settings: dirty-glow save button + side-nav scrollspy ---
+  var form = document.getElementById("settingsform");
+  if (form) {
+    var save = document.getElementById("savebtn");
+    var els = Array.from(form.elements).filter(function (e) { return e.name && e.name !== "csrf"; });
+    var initial = new Map();
+    els.forEach(function (e) { initial.set(e, e.type === "checkbox" ? e.checked : e.value); });
+    function recompute() {
+      var dirty = els.some(function (e) {
+        return (e.type === "checkbox" ? e.checked : e.value) !== initial.get(e);
+      });
+      if (save) save.classList.toggle("dirty", dirty);
+    }
+    form.addEventListener("input", recompute);
+    form.addEventListener("change", recompute);
+
+    var links = Array.from(document.querySelectorAll(".settingsnav a"));
+    var byId = {};
+    links.forEach(function (a) { byId[a.dataset.target] = a; });
+    if ("IntersectionObserver" in window && links.length) {
+      var obs = new IntersectionObserver(function (entries) {
+        entries.forEach(function (en) {
+          if (en.isIntersecting) {
+            links.forEach(function (a) { a.classList.remove("active"); });
+            if (byId[en.target.id]) byId[en.target.id].classList.add("active");
+          }
+        });
+      }, { rootMargin: "-40% 0px -55% 0px" });
+      form.querySelectorAll("fieldset").forEach(function (fs) { obs.observe(fs); });
+    }
+  }
 })();
