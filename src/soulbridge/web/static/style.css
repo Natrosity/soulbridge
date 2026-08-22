@@ -147,23 +147,36 @@ tr.rejected { opacity: 0.5; }
 .fvals .fold, .fvals .fnew { display: inline; overflow-wrap: anywhere; }
 
 /* Library page */
-.libgrid {
-  display: grid; gap: 16px; margin-bottom: 18px;
-  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+main.wide { max-width: min(1240px, 95vw); }
+.libhead { display: flex; align-items: baseline; gap: 12px; margin: 4px 2px 18px; }
+.libhead h1 { margin: 0; font-size: 22px; font-weight: 600; }
+
+.libgrid { display: grid; gap: 16px; grid-template-columns: repeat(5, 1fr); margin-bottom: 22px; }
+@media (max-width: 1000px) { .libgrid { grid-template-columns: repeat(4, 1fr); } }
+@media (max-width: 760px)  { .libgrid { grid-template-columns: repeat(3, 1fr); } }
+@media (max-width: 520px)  { .libgrid { grid-template-columns: repeat(2, 1fr); } }
+
+.libcard {
+  position: relative; aspect-ratio: 1 / 1; border-radius: 8px; overflow: hidden;
+  background: var(--panel2); border: 1px solid var(--line); box-shadow: 0 2px 8px rgba(0,0,0,.3);
 }
-.libcard { min-width: 0; }
-.libcover {
-  aspect-ratio: 1 / 1; border-radius: 8px; overflow: hidden; background: var(--panel2);
-  border: 1px solid var(--line); box-shadow: 0 2px 8px rgba(0,0,0,.35);
+.libcard img { width: 100%; height: 100%; object-fit: cover; display: block; }
+
+.libov {
+  position: absolute; inset: 0; opacity: 0; transition: opacity .18s ease;
+  display: flex; flex-direction: column; justify-content: space-between; padding: 12px;
+  color: #fff; font-family: Georgia, "Iowan Old Style", "Palatino Linotype", Palatino, serif;
+  background: linear-gradient(to bottom,
+    rgba(0,0,0,.78) 0%, rgba(0,0,0,.32) 32%, rgba(0,0,0,.32) 58%, rgba(0,0,0,.82) 100%);
 }
-.libcover img { width: 100%; height: 100%; object-fit: cover; display: block; }
-.libtitle { margin-top: 8px; font-size: 13px; font-weight: 600; line-height: 1.3;
-  overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
-.libauthor { font-size: 12px; color: var(--muted); margin-top: 2px; overflow: hidden;
-  white-space: nowrap; text-overflow: ellipsis; }
-.libmeta { font-size: 11px; color: var(--muted); margin-top: 2px; overflow: hidden;
-  white-space: nowrap; text-overflow: ellipsis; }
-.pager { display: flex; align-items: center; justify-content: center; gap: 16px; margin: 8px 0 20px; }
+.libcard:hover .libov { opacity: 1; }
+.ov-title {
+  font-size: 15px; font-weight: 700; line-height: 1.25; text-shadow: 0 1px 4px rgba(0,0,0,.85);
+  display: -webkit-box; -webkit-line-clamp: 4; -webkit-box-orient: vertical; overflow: hidden;
+}
+.ov-author { font-size: 13px; font-style: italic; text-shadow: 0 1px 3px rgba(0,0,0,.85); }
+.ov-meta { font-size: 11px; opacity: .9; margin-top: 3px; letter-spacing: .01em; text-shadow: 0 1px 3px rgba(0,0,0,.85); }
+.pager { display: flex; align-items: center; justify-content: center; gap: 16px; margin: 8px 0 24px; }
 
 footer { max-width: 1000px; margin: 10px auto 40px; padding: 0 18px; display: flex; justify-content: space-between; color: var(--muted); font-size: 12px; }
 

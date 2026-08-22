@@ -7,7 +7,7 @@
   <link rel="icon" type="image/png" sizes="32x32" href="/static/favicon-32.png">
   <link rel="icon" type="image/png" sizes="16x16" href="/static/favicon-16.png">
   <link rel="apple-touch-icon" href="/static/apple-touch-icon.png">
-  <link rel="stylesheet" href="/static/style.css">
+  <link rel="stylesheet" href="/static/style.css?v={{ version }}">
 </head>
 <body>
 <header class="topbar">
@@ -34,7 +34,7 @@
     <span id="sb-poll" class="poll">{{ wstatus.last_poll or '—' }}</span>
   </div>
 </header>
-<main>
+<main class="{% block main_class %}{% endblock %}">
   {% block content %}{% endblock %}
 </main>
 <footer>

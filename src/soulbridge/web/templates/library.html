@@ -1,31 +1,34 @@
 {% extends "base.html" %}
 {% block title %}Library · {{ instance }}{% endblock %}
+{% block main_class %}wide{% endblock %}
 {% block content %}
-<section class="panel">
-  <h2>Library
-    {% if configured %}<span class="muted">({{ total }} in Audiobookshelf)</span>{% endif %}
-  </h2>
-  {% if not configured %}
-    <p class="empty">Connect Audiobookshelf in <a href="/settings">Settings</a> (URL, API key, and
-      library id) to browse what you already have here.</p>
-  {% elif not items %}
-    <p class="empty">No books found in that Audiobookshelf library.</p>
-  {% endif %}
-</section>
+<div class="libhead">
+  <h1>Library</h1>
+  {% if configured %}<span class="muted">{{ total }} in Audiobookshelf</span>{% endif %}
+</div>
+
+{% if not configured %}
+  <p class="empty">Connect Audiobookshelf in <a href="/settings">Settings</a> (URL, API key, and
+    library id) to browse what you already have here.</p>
+{% elif not items %}
+  <p class="empty">No books found in that Audiobookshelf library.</p>
+{% endif %}
 
 {% if items %}
 <div class="libgrid">
   {% for b in items %}
   <div class="libcard" title="{{ b.title }}{% if b.author %} — {{ b.author }}{% endif %}">
-    <div class="libcover">
-      <img src="/library/cover/{{ b.id }}" alt="" loading="lazy">
-    </div>
-    <div class="libtitle">{{ b.title }}</div>
-    <div class="libauthor">{{ b.author or 'Unknown author' }}</div>
-    <div class="libmeta">
-      {% if b.narrator %}{{ b.narrator }}{% endif %}
-      {% if b.year %}{% if b.narrator %} · {% endif %}{{ b.year }}{% endif %}
-      {% if b.duration_min %} · {{ (b.duration_min // 60) }}h {{ (b.duration_min % 60) }}m{% endif %}
+    <img src="/library/cover/{{ b.id }}" alt="" loading="lazy">
+    <div class="libov">
+      <div class="ov-title">{{ b.title }}</div>
+      <div class="ov-foot">
+        <div class="ov-author">{{ b.author or 'Unknown author' }}</div>
+        <div class="ov-meta">
+          {% if b.narrator %}{{ b.narrator }}{% endif %}
+          {% if b.year %}{% if b.narrator %} · {% endif %}{{ b.year }}{% endif %}
+          {% if b.duration_min %} · {{ (b.duration_min // 60) }}h {{ (b.duration_min % 60) }}m{% endif %}
+        </div>
+      </div>
     </div>
   </div>
   {% endfor %}
