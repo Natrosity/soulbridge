@@ -22,7 +22,37 @@ a:hover { text-decoration: underline; }
 .topbar nav { display: flex; gap: 18px; }
 .topbar nav a { color: var(--muted); font-weight: 500; }
 .topbar nav a:hover { color: var(--text); text-decoration: none; }
-.statusstrip { margin-left: auto; display: flex; align-items: center; gap: 10px; font-size: 13px; }
+.topright { margin-left: auto; display: flex; align-items: center; gap: 16px; }
+.statusstrip { display: flex; align-items: center; gap: 10px; font-size: 13px; }
+.usermenu { display: flex; align-items: center; gap: 14px; font-size: 13px; }
+.usermenu a { color: var(--muted); }
+.usermenu a:hover { color: var(--text); text-decoration: none; }
+.usermenu .who { color: var(--text); font-weight: 600; }
+.usermenu .logout { margin: 0; }
+
+/* auth pages */
+.authwrap { min-height: 70vh; display: flex; align-items: center; justify-content: center; }
+.authcard { width: 100%; max-width: 360px; background: var(--panel); border: 1px solid var(--line);
+  border-radius: var(--radius); padding: 30px 28px; text-align: center; }
+.authlogo { margin-bottom: 10px; }
+.authlogo img { border-radius: 12px; }
+.authcard h1 { font-size: 20px; margin: 4px 0 6px; }
+.authcard form { display: flex; flex-direction: column; gap: 12px; text-align: left; margin-top: 16px; }
+.authcard label { font-size: 13px; color: var(--muted); display: flex; flex-direction: column; gap: 5px; }
+.authcard input { padding: 9px 12px; border-radius: 8px; background: var(--panel2);
+  border: 1px solid var(--line); color: var(--text); font-size: 14px; }
+.authcard .btn { margin-top: 6px; }
+.autherr { background: #2a1414; border: 1px solid #4b2020; color: var(--err);
+  padding: 9px 12px; border-radius: 8px; font-size: 13px; margin: 6px 0; }
+
+/* user management */
+.usertable td { vertical-align: middle; }
+.usertable form.inline { display: inline-flex; gap: 6px; margin: 0; align-items: center; }
+.usertable select, .usertable input[type=password] { padding: 5px 8px; border-radius: 7px;
+  background: var(--panel2); border: 1px solid var(--line); color: var(--text); font-size: 13px; }
+.urow-actions { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+.searchform select { padding: 9px 12px; border-radius: 8px; background: var(--panel2);
+  border: 1px solid var(--line); color: var(--text); font-size: 14px; }
 .dot { width: 9px; height: 9px; border-radius: 50%; display: inline-block; }
 .dot.on { background: var(--ok); box-shadow: 0 0 8px var(--ok); }
 .dot.off { background: var(--err); }

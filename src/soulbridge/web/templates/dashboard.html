@@ -2,18 +2,4 @@
 {% block title %}Dashboard · {{ instance }}{% endblock %}
 {% block content %}
 <div id="dash">{% include "_dashboard_body.html" %}</div>
-<script>
-// Live-refresh the dashboard body without a full page reload (keeps scroll position).
-(function () {
-  var el = document.getElementById('dash');
-  async function refresh() {
-    if (document.hidden) return;
-    try {
-      var r = await fetch('/partials/dashboard', {cache: 'no-store'});
-      if (r.ok) el.innerHTML = await r.text();
-    } catch (e) { /* transient; try again next tick */ }
-  }
-  setInterval(refresh, 5000);
-})();
-</script>
 {% endblock %}

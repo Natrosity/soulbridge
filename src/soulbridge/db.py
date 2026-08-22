@@ -53,6 +53,19 @@ CREATE TABLE IF NOT EXISTS tag_writes (
     cover      TEXT,
     fields     TEXT NOT NULL DEFAULT '[]'   -- JSON: [{name, old, new, action}]
 );
+CREATE TABLE IF NOT EXISTS users (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    username        TEXT NOT NULL UNIQUE COLLATE NOCASE,
+    email           TEXT,
+    password_hash   TEXT,
+    role            TEXT NOT NULL DEFAULT 'standard',   -- admin | trusted | standard
+    plex_id         TEXT,
+    preferences     TEXT NOT NULL DEFAULT '{}',
+    failed_attempts INTEGER NOT NULL DEFAULT 0,
+    locked_until    TEXT,
+    created_at      TEXT NOT NULL,
+    last_login      TEXT
+);
 CREATE INDEX IF NOT EXISTS idx_items_status ON items(status);
 CREATE INDEX IF NOT EXISTS idx_events_ts ON events(ts);
 CREATE INDEX IF NOT EXISTS idx_tagwrites_ts ON tag_writes(id);
@@ -211,3 +224,50 @@ def recent_tag_writes(limit: int = 100) -> list[dict[str, Any]]:
                 d["fields"] = []
             out.append(d)
         return out
+
+
+# ---- users ----
+def user_count() -> int:
+    with connect() as c:
+        return c.execute("SELECT COUNT(*) n FROM users").fetchone()["n"]
+
+
+def create_user(username: str, password_hash: Optional[str], role: str = "standard",
+                email: Optional[str] = None, plex_id: Optional[str] = None) -> int:
+    with connect() as c:
+        cur = c.execute(
+            "INSERT INTO users(username,email,password_hash,role,plex_id,created_at) "
+            "VALUES(?,?,?,?,?,?)",
+            (username, email, password_hash, role, plex_id, _now()),
+        )
+        return int(cur.lastrowid)
+
+
+def get_user(user_id: int) -> Optional[dict[str, Any]]:
+    with connect() as c:
+        r = c.execute("SELECT * FROM users WHERE id=?", (user_id,)).fetchone()
+        return dict(r) if r else None
+
+
+def get_user_by_name(username: str) -> Optional[dict[str, Any]]:
+    with connect() as c:
+        r = c.execute("SELECT * FROM users WHERE username=? COLLATE NOCASE", (username,)).fetchone()
+        return dict(r) if r else None
+
+
+def list_users() -> list[dict[str, Any]]:
+    with connect() as c:
+        return [dict(r) for r in c.execute("SELECT * FROM users ORDER BY id")]
+
+
+def update_user(user_id: int, **fields: Any) -> None:
+    if not fields:
+        return
+    sets = ",".join(f"{k}=?" for k in fields)
+    with connect() as c:
+        c.execute(f"UPDATE users SET {sets} WHERE id=?", (*fields.values(), user_id))
+
+
+def delete_user(user_id: int) -> None:
+    with connect() as c:
+        c.execute("DELETE FROM users WHERE id=?", (user_id,))

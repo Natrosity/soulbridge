@@ -26,7 +26,7 @@ reviewed in order; Soulbridge and ABR can run side by side until cutover.
 
 ---
 
-## Phase 1 — Auth + hardening  *(in progress)*
+## Phase 1 — Auth + hardening  *(done — audited clean, v0.5.0)*
 
 The security foundation. Nothing user-facing from later phases ships until this is done
 and audited, because the app becomes internet-facing.
@@ -88,3 +88,7 @@ and audited, because the app becomes internet-facing.
 ## Status log
 
 - 2026-08-22: plan agreed; Phase 1 started.
+- 2026-08-22: Phase 1 complete (v0.5.0) — internal accounts, roles, sessions, CSRF,
+  admin-gating, masked secrets, lockout, security headers/CSP. Security audit: no
+  HIGH/MEDIUM findings. Deployed; instance now requires first-run admin setup.
+  Next: Phase 2 (discovery search).

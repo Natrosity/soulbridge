@@ -1,0 +1,55 @@
+{% extends "base.html" %}
+{% block title %}Users · {{ instance }}{% endblock %}
+{% block content %}
+<section class="panel">
+  <h2>Users <span class="muted">({{ users|length }})</span></h2>
+  {% if error %}<div class="autherr">{{ error }}</div>{% endif %}
+  <table class="results usertable">
+    <thead><tr><th>User</th><th>Role</th><th>Last login</th><th></th></tr></thead>
+    <tbody>
+    {% for u in users %}
+      <tr>
+        <td><strong>{{ u.username }}</strong></td>
+        <td>
+          <form method="post" action="/users/{{ u.id }}/role" class="inline">
+            <input type="hidden" name="csrf" value="{{ csrf }}">
+            <select name="role" onchange="this.form.submit()">
+              {% for r in roles %}<option value="{{ r }}" {{ 'selected' if u.role == r }}>{{ r }}</option>{% endfor %}
+            </select>
+          </form>
+        </td>
+        <td class="muted">{{ (u.last_login or '—').replace('T',' ') }}</td>
+        <td class="urow-actions">
+          <form method="post" action="/users/{{ u.id }}/password" class="inline"
+                onsubmit="return this.password.value.length>=10 || (alert('Password must be at least 10 characters'),false)">
+            <input type="hidden" name="csrf" value="{{ csrf }}">
+            <input type="password" name="password" placeholder="reset password" autocomplete="new-password">
+            <button class="btn sm" type="submit">Set</button>
+          </form>
+          {% if not (u.role == 'admin') or users|selectattr('role','equalto','admin')|list|length > 1 %}
+          <form method="post" action="/users/{{ u.id }}/delete" class="inline"
+                onsubmit="return confirm('Delete {{ u.username }}?')">
+            <input type="hidden" name="csrf" value="{{ csrf }}">
+            <button class="btn ghost sm" type="submit">Delete</button>
+          </form>
+          {% endif %}
+        </td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</section>
+
+<section class="panel">
+  <h2>Add user</h2>
+  <form method="post" action="/users" class="searchform" autocomplete="off">
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+    <input type="text" name="username" placeholder="Username" required>
+    <input type="password" name="password" placeholder="Password (min 10)" autocomplete="new-password" required>
+    <select name="role">{% for r in roles %}<option value="{{ r }}" {{ 'selected' if r == 'standard' }}>{{ r }}</option>{% endfor %}</select>
+    <button class="btn primary" type="submit">Create</button>
+  </form>
+  <p class="hint">New users default to the role set in <a href="/settings">Server Settings</a> unless
+    you pick one here. Standard users' requests need approval; trusted users auto-download.</p>
+</section>
+{% endblock %}
