@@ -1,0 +1,13 @@
+.git
+.github
+.venv
+venv
+__pycache__
+*.pyc
+config
+*.db
+*.sqlite*
+.env
+docs
+*.md
+!README.md

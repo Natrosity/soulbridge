@@ -1,0 +1,53 @@
+{% extends "base.html" %}
+{% block title %}Search · {{ instance }}{% endblock %}
+{% block content %}
+<section class="panel">
+  <h2>Search Soulseek</h2>
+  <form method="post" action="/search" class="searchform">
+    <input type="text" name="title" placeholder="Title" value="{{ title }}" required autofocus>
+    <input type="text" name="author" placeholder="Author (optional)" value="{{ author }}">
+    {% if item_id %}<input type="hidden" name="item" value="{{ item_id }}">{% endif %}
+    <button class="btn primary" type="submit">Search</button>
+  </form>
+  {% if item_id %}<p class="hint">Grabbing here will fulfil AudioBookRequest item #{{ item_id }}.</p>{% endif %}
+</section>
+
+{% if results is not none %}
+<section class="panel">
+  <h2>Results <span class="muted">({{ results|length }})</span></h2>
+  {% if results %}
+  <table class="results">
+    <thead><tr>
+      <th>Match</th><th>User</th><th>Files</th><th>Format</th><th>Size</th><th>Slot</th><th>Score</th><th></th>
+    </tr></thead>
+    <tbody>
+    {% for r in results %}
+      <tr class="{{ '' if r.acceptable else 'rejected' }}">
+        <td class="match" title="{{ r.directory }}">{{ r.label or r.directory }}</td>
+        <td>{{ r.username }}</td>
+        <td>{{ r.files }}</td>
+        <td>{{ r.exts | join(', ') }}</td>
+        <td>{{ r.size_mb }} MB</td>
+        <td>{{ '✓' if r.free_slot else '—' }}</td>
+        <td class="score">{{ r.score }}</td>
+        <td>
+          <form method="post" action="/grab">
+            <input type="hidden" name="title" value="{{ title }}">
+            <input type="hidden" name="author" value="{{ author }}">
+            <input type="hidden" name="token" value="{{ token }}">
+            <input type="hidden" name="index" value="{{ loop.index0 }}">
+            {% if item_id %}<input type="hidden" name="item" value="{{ item_id }}">{% endif %}
+            <button class="btn primary sm" type="submit">Grab</button>
+          </form>
+        </td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  <p class="hint">Rows in grey scored below the acceptance threshold (wrong format, size, or weak title match) but you can still grab them.</p>
+  {% else %}
+    <p class="empty">No audio results. Try fewer / different title words.</p>
+  {% endif %}
+</section>
+{% endif %}
+{% endblock %}

@@ -1,0 +1,34 @@
+{% extends "base.html" %}
+{% block title %}Settings · {{ instance }}{% endblock %}
+{% block content %}
+<section class="panel">
+  <h2>Settings</h2>
+  {% if saved %}<div class="saved">Saved. The worker picked up your changes.</div>{% endif %}
+  <form method="post" action="/settings" class="settingsform">
+    {% for group, fields in grouped.items() %}
+    <fieldset>
+      <legend>{{ group }}</legend>
+      {% for row in fields %}
+        {% set f = row.field %}
+        <div class="field">
+          <label for="{{ f.key }}">{{ f.label }}</label>
+          <div class="control">
+            {% if f.type == 'bool' %}
+              <input type="checkbox" id="{{ f.key }}" name="{{ f.key }}" {{ 'checked' if row.value in ('true','1','yes','on') }}>
+            {% elif f.type == 'password' %}
+              <input type="password" id="{{ f.key }}" name="{{ f.key }}" value="{{ row.value }}" autocomplete="off">
+            {% elif f.type == 'number' %}
+              <input type="number" id="{{ f.key }}" name="{{ f.key }}" value="{{ row.value }}">
+            {% else %}
+              <input type="text" id="{{ f.key }}" name="{{ f.key }}" value="{{ row.value }}">
+            {% endif %}
+            {% if f.help %}<small>{{ f.help }}</small>{% endif %}
+          </div>
+        </div>
+      {% endfor %}
+    </fieldset>
+    {% endfor %}
+    <div class="formactions"><button class="btn primary" type="submit">Save settings</button></div>
+  </form>
+</section>
+{% endblock %}

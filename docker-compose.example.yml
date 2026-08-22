@@ -1,0 +1,23 @@
+# Soulbridge — example deployment.
+# Mount the SAME media parent that slskd and your library share, so completed
+# Soulseek downloads can be moved into the library on one filesystem.
+services:
+  soulbridge:
+    image: ghcr.io/natrosity/soulbridge:latest
+    container_name: soulbridge
+    restart: unless-stopped
+    ports:
+      - "8793:8793"
+    environment:
+      - TZ=Etc/UTC
+      # Optional first-run seeds (everything is also editable in the web UI):
+      - SOULBRIDGE_SLSKD_URL=http://slskd:5030
+      # - SOULBRIDGE_SLSKD_API_KEY=...
+      - SOULBRIDGE_SLSKD_DOWNLOADS_PATH=/data/soulseek/complete
+      - SOULBRIDGE_ABR_URL=http://audiobookrequest:8000
+      # - SOULBRIDGE_ABR_API_KEY=...
+      - SOULBRIDGE_LIBRARY_PATH=/data/media/audiobooks
+    volumes:
+      - ./config:/config          # Soulbridge database + settings
+      - /path/to/data:/data       # must contain both the slskd downloads and the library
+    # Reach slskd / AudioBookRequest by container name — put them on a shared network.
