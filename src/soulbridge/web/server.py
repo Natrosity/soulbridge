@@ -8,11 +8,12 @@ from pathlib import Path
 from typing import Any, Optional
 
 from fastapi import FastAPI, Form, Request
-from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
 from .. import __version__, db, settings
+from ..clients.abs import ABS
 from ..core import worker
 
 HERE = Path(__file__).parent
@@ -43,6 +44,8 @@ def _ctx(request: Request, **extra: Any) -> dict[str, Any]:
         "request": request, "version": __version__,
         "instance": settings.get("instance_name") or "Soulbridge",
         "wstatus": worker.STATUS, "badges": STATUS_BADGES,
+        "library_available": bool(settings.get("abs_url") and settings.get("abs_api_key")
+                                  and settings.get("abs_library_id")),
     }
     ctx.update(extra)
     return ctx
@@ -130,6 +133,34 @@ def tags_page(request: Request):
     return templates.TemplateResponse(request, "tags.html", _ctx(
         request, writes=db.recent_tag_writes(100),
     ))
+
+
+@app.get("/library", response_class=HTMLResponse)
+def library_page(request: Request, page: int = 0):
+    url, key, lib = settings.get("abs_url"), settings.get("abs_api_key"), settings.get("abs_library_id")
+    configured = bool(url and key and lib)
+    per, items, total = 48, [], 0
+    if configured:
+        a = ABS(url, key)
+        items, total = a.library_items(lib, limit=per, page=max(0, page), sort="addedAt", desc=True)
+        a.close()
+    pages = (total + per - 1) // per if per else 1
+    return templates.TemplateResponse(request, "library.html", _ctx(
+        request, items=items, total=total, page=max(0, page), pages=pages, configured=configured,
+    ))
+
+
+@app.get("/library/cover/{item_id}")
+def library_cover(item_id: str):
+    url, key = settings.get("abs_url"), settings.get("abs_api_key")
+    if not (url and key):
+        return Response(status_code=404)
+    a = ABS(url, key)
+    data, ct = a.item_cover(item_id)
+    a.close()
+    if not data:
+        return Response(status_code=404)
+    return Response(content=data, media_type=ct, headers={"Cache-Control": "public, max-age=86400"})
 
 
 @app.get("/settings", response_class=HTMLResponse)

@@ -43,6 +43,8 @@ AudioBookRequest ─►  Soulbridge  ─►  slskd (Soulseek)
   filling gaps and only replacing existing tags when the new value is genuinely better.
 - **Targeted media-server scans** — Plex scans just the new folder, not the whole library;
   Jellyfin and Audiobookshelf too, with live connection indicators for each.
+- **Library browser** — an optional grid of what you already own, pulled from Audiobookshelf
+  (Plex and Jellyfin later). Covers are proxied so no token leaves the server.
 - **Web UI** — live dashboard, manual search and grab, tag-write history, and settings. No config
   files needed (environment variables seed the defaults if you want them).
 - **Light** — FastAPI and SQLite in a single container.

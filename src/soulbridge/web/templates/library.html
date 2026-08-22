@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+{% block title %}Library · {{ instance }}{% endblock %}
+{% block content %}
+<section class="panel">
+  <h2>Library
+    {% if configured %}<span class="muted">({{ total }} in Audiobookshelf)</span>{% endif %}
+  </h2>
+  {% if not configured %}
+    <p class="empty">Connect Audiobookshelf in <a href="/settings">Settings</a> (URL, API key, and
+      library id) to browse what you already have here.</p>
+  {% elif not items %}
+    <p class="empty">No books found in that Audiobookshelf library.</p>
+  {% endif %}
+</section>
+
+{% if items %}
+<div class="libgrid">
+  {% for b in items %}
+  <div class="libcard" title="{{ b.title }}{% if b.author %} — {{ b.author }}{% endif %}">
+    <div class="libcover">
+      <img src="/library/cover/{{ b.id }}" alt="" loading="lazy">
+    </div>
+    <div class="libtitle">{{ b.title }}</div>
+    <div class="libauthor">{{ b.author or 'Unknown author' }}</div>
+    <div class="libmeta">
+      {% if b.narrator %}{{ b.narrator }}{% endif %}
+      {% if b.year %}{% if b.narrator %} · {% endif %}{{ b.year }}{% endif %}
+      {% if b.duration_min %} · {{ (b.duration_min // 60) }}h {{ (b.duration_min % 60) }}m{% endif %}
+    </div>
+  </div>
+  {% endfor %}
+</div>
+
+{% if pages > 1 %}
+<div class="pager">
+  {% if page > 0 %}<a class="btn" href="/library?page={{ page - 1 }}">← Prev</a>{% endif %}
+  <span class="muted">Page {{ page + 1 }} of {{ pages }}</span>
+  {% if page + 1 < pages %}<a class="btn" href="/library?page={{ page + 1 }}">Next →</a>{% endif %}
+</div>
+{% endif %}
+{% endif %}
+{% endblock %}
