@@ -111,6 +111,13 @@ def score_group(g: Group, title: str, author: str, prefs: dict[str, Any]) -> flo
         return -1.0                                   # not confidently this book
     if any(s in text for s in SPAM if s != "abridged"):
         return -1.0
+    # Generic one-word titles ("Fire", "It", "1984") match far too much — a bare
+    # "fire" hits music, games, anything. When the title carries <=1 distinctive
+    # word, insist the author's surname appears so we don't grab the wrong thing.
+    surname = norm(author).split()[-1] if author else ""
+    distinctive = [t for t in want if len(t) >= 3]
+    if len(distinctive) <= 1 and surname and surname not in text:
+        return -1.0
     size_mb = g.total_size / 1_048_576
     if size_mb < prefs["min_mb"] or size_mb > prefs["max_mb"]:
         return -1.0

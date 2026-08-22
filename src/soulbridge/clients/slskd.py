@@ -36,6 +36,16 @@ class Slskd:
         except Exception:
             return False
 
+    def reconnect(self) -> bool:
+        """Nudge slskd to re-establish its Soulseek server connection. Soulseek
+        occasionally wedges in a 'Disconnecting' state; a disconnect request makes
+        slskd cycle back to Connected, LoggedIn."""
+        try:
+            self._c.put(self.base + "/server", json={"state": "disconnect"})
+            return True
+        except Exception:
+            return False
+
     # ---- search ----
     def start_search(self, text: str) -> str:
         r = self._c.post(self.base + "/searches", json={"searchText": text})

@@ -49,8 +49,9 @@ SPEC: list[Field] = [
     Field("require_free_slot", "Prefer sources with a free upload slot", "true", "Behaviour", "bool"),
     Field("preferred_formats", "Preferred formats (priority order)", "m4b,m4a,mp3,flac,ogg", "Behaviour",
           help="Comma-separated. Single-file m4b is ideal for audiobooks."),
-    Field("min_size_mb", "Minimum size (MB)", "20", "Behaviour", "number",
-          help="Reject tiny files (samples, wrong matches)."),
+    Field("min_size_mb", "Minimum size (MB)", "50", "Behaviour", "number",
+          help="Reject tiny files (samples, single tracks, wrong matches). Full "
+               "audiobooks are usually 50MB+."),
     Field("max_size_mb", "Maximum size (MB)", "4000", "Behaviour", "number"),
     Field("instance_name", "Instance name", "Soulbridge", "General"),
 ]

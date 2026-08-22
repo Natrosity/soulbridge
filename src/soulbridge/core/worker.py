@@ -108,28 +108,62 @@ def grab(item_id: int, username: str, files: list[dict[str, Any]], directory: st
         sk.close()
 
 
+MAX_ATTEMPTS = 6  # retries (across ticks) before an item is parked as no_results/failed
+
+
+def _park_or_retry(item_id: int, attempts: int, title: str, kind: str, err: str = "") -> None:
+    """A search/grab attempt didn't succeed. Retry on later ticks until the cap,
+    then park terminally (no_results for empty searches, failed for errors)."""
+    if attempts >= MAX_ATTEMPTS:
+        status = "failed" if kind == "error" else "no_results"
+        db.update_item(item_id, status=status, error=err or None)
+        db.log_event(f"Giving up on '{title}' after {attempts} attempts"
+                     + (f": {err}" if err else ""), "warn", item_id)
+    else:
+        db.update_item(item_id, status="pending", error=err or None)
+        db.log_event(f"'{title}': no luck yet (attempt {attempts}/{MAX_ATTEMPTS}); will retry"
+                     + (f" — {err}" if err else ""), "info", item_id)
+
+
 def process_item(item_id: int) -> None:
-    """Search for a pending item and grab the best match (or mark no_results)."""
+    """Search for a pending item and grab the best match. Transient problems
+    (slskd disconnected, momentary enqueue failure) leave the item pending to
+    retry — only a genuine dead-end after MAX_ATTEMPTS is parked terminally."""
     item = db.get_item(item_id)
     if not item:
         return
     title, author = item["title"], item.get("author") or ""
-    db.update_item(item_id, status="searching", error=None)
     sk = _slskd()
     try:
+        # Don't burn an attempt (or hard-fail) when Soulseek is simply mid-reconnect.
+        if not sk.is_connected():
+            sk.reconnect()
+            db.log_event("slskd not connected to Soulseek; nudged reconnect, will retry",
+                         "warn", item_id)
+            return  # item stays pending
+        attempts = int(item.get("attempts") or 0) + 1
+        db.update_item(item_id, status="searching", attempts=attempts, error=None)
+
         prefs = matching.default_prefs(settings)
         best = None
         for q in matching.build_queries(title, author):
-            responses = sk.search(q, wait=25)
-            best = matching.pick_best(responses, title, author, prefs)
+            best = matching.pick_best(sk.search(q, wait=40), title, author, prefs)
             if best:
                 break
         if not best:
-            db.update_item(item_id, status="no_results")
-            db.log_event(f"No Soulseek match for '{title}'", "warn", item_id)
+            _park_or_retry(item_id, attempts, title, "empty")
             return
-        with _lock:
-            sk.enqueue(best.username, best.files)
+
+        try:
+            with _lock:
+                sk.enqueue(best.username, best.files)
+        except Exception as e:
+            # enqueue can fail transiently (peer offline, slskd reconnecting) — retry
+            if not sk.is_connected():
+                sk.reconnect()
+            _park_or_retry(item_id, attempts, title, "error", str(e))
+            return
+
         db.update_item(
             item_id, status="downloading", slskd_username=best.username,
             slskd_dir=best.directory,
@@ -142,8 +176,9 @@ def process_item(item_id: int) -> None:
             item_id=item_id,
         )
     except Exception as e:
-        db.update_item(item_id, status="failed", error=str(e))
-        db.log_event(f"Search/grab failed for '{title}': {e}", "error", item_id)
+        # search-level transient error — retry rather than fail outright
+        attempts = int(item.get("attempts") or 0) + 1
+        _park_or_retry(item_id, attempts, title, "error", str(e))
     finally:
         sk.close()
 

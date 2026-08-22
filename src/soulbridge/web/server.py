@@ -98,14 +98,14 @@ def do_grab(title: str = Form(...), author: str = Form(""), token: str = Form(..
 
 @app.post("/items/{item_id}/search")
 def item_search_now(item_id: int):
-    db.update_item(item_id, status="pending")
+    db.update_item(item_id, status="pending", attempts=0, error=None)
     worker.wake()
     return RedirectResponse("/", status_code=303)
 
 
 @app.post("/items/{item_id}/retry")
 def item_retry(item_id: int):
-    db.update_item(item_id, status="pending", error=None)
+    db.update_item(item_id, status="pending", attempts=0, error=None)
     worker.wake()
     return RedirectResponse("/", status_code=303)
 
