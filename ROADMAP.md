@@ -47,13 +47,15 @@ and audited, because the app becomes internet-facing.
   inline scripts moved to static files so CSP can forbid inline JS.
 - Deliverable: a security audit + report before proceeding.
 
-## Phase 2 — Discovery search
+## Phase 2 — Discovery search  *(done — v0.6.0)*
 
 - `clients/audible.py` — catalog search (region-aware) → real listings (ASIN, title,
   authors, narrators, series, cover, runtime).
-- Discovery UI: search → cover grid of book results → **Request**.
-- Request creates an item (source = `user`, ASIN), enriches via Audnexus, feeds the
-  existing pipeline.
+- Discovery UI (`/discover`, all users): search → results with **Request**.
+- Request creates an item (source = `user`, ASIN, requested_by); trusted/admin →
+  `pending` (auto-pipeline), standard → `awaiting_approval` (held for Phase 4).
+- `My Requests` (`/requests`) shows each user their own request statuses.
+- Nav reworked: user-facing Request / My Requests / Library first; admin extras after.
 
 ## Phase 3 — Auto vs interactive requests with scores
 
@@ -91,4 +93,8 @@ and audited, because the app becomes internet-facing.
 - 2026-08-22: Phase 1 complete (v0.5.0) — internal accounts, roles, sessions, CSRF,
   admin-gating, masked secrets, lockout, security headers/CSP. Security audit: no
   HIGH/MEDIUM findings. Deployed; instance now requires first-run admin setup.
-  Next: Phase 2 (discovery search).
+- 2026-08-22: Settings UX (dropdown role, category side-nav + scrollspy, floating
+  glow-on-change save) and status indicators moved to a bottom toolbar (v0.5.1).
+- 2026-08-22: Phase 2 complete (v0.6.0) — Audible discovery search, request flow
+  (role-aware: trusted auto, standard awaiting-approval), My Requests page.
+  Next: Phase 3 (auto vs interactive requests with candidate scores).

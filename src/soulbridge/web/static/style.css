@@ -208,6 +208,25 @@ main.wide { max-width: min(1240px, 95vw); }
 .ov-meta { font-size: 11px; opacity: .9; margin-top: 3px; letter-spacing: .01em; text-shadow: 0 1px 3px rgba(0,0,0,.85); }
 .pager { display: flex; align-items: center; justify-content: center; gap: 16px; margin: 8px 0 24px; }
 
+/* discovery + my-requests rows */
+.drow { display: flex; gap: 14px; align-items: center; padding: 12px 0; border-top: 1px solid var(--line); }
+.drow:first-of-type { border-top: none; }
+.dcover { width: 68px; height: 68px; flex: none; border-radius: 6px; overflow: hidden;
+  background: var(--panel2); border: 1px solid var(--line); }
+.dcover.small { width: 52px; height: 52px; }
+.dcover img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.dcover .ph { width: 100%; height: 100%; display: flex; align-items: center; justify-content: center;
+  color: var(--muted); font-size: 22px; }
+.dmeta { flex: 1; min-width: 0; }
+.dtitle { font-weight: 600; }
+.dsubtitle { color: var(--muted); font-weight: 400; }
+.dauthor { color: var(--text); font-size: 13px; margin-top: 1px; }
+.dsub { color: var(--muted); font-size: 12px; margin-top: 2px; }
+.dsub2 { color: var(--muted); font-size: 12px; margin-top: 1px; }
+.err-text { color: var(--err); }
+.daction { flex: none; }
+.daction form { margin: 0; }
+
 /* bottom toolbar (status indicators live here now) */
 body { padding-bottom: 46px; }
 .bottombar {

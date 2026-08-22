@@ -172,6 +172,22 @@ def list_items(statuses: Optional[Iterable[str]] = None, limit: int = 200) -> li
         return [dict(r) for r in rows]
 
 
+def list_items_by_user(username: str, limit: int = 200) -> list[dict[str, Any]]:
+    with connect() as c:
+        rows = c.execute(
+            "SELECT * FROM items WHERE requested_by=? ORDER BY updated_at DESC LIMIT ?",
+            (username, limit),
+        ).fetchall()
+        return [dict(r) for r in rows]
+
+
+def get_item_by_source(source: str, source_id: str) -> Optional[dict[str, Any]]:
+    with connect() as c:
+        r = c.execute("SELECT * FROM items WHERE source=? AND source_id=?",
+                      (source, source_id)).fetchone()
+        return dict(r) if r else None
+
+
 def counts_by_status() -> dict[str, int]:
     with connect() as c:
         rows = c.execute("SELECT status, COUNT(*) n FROM items GROUP BY status").fetchall()

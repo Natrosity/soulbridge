@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+{% block title %}My Requests · {{ instance }}{% endblock %}
+{% block content %}
+<section class="panel">
+  <h2>My requests <span class="muted">({{ items|length }})</span></h2>
+  {% if not items %}
+    <p class="empty">No requests yet. <a href="/discover">Find an audiobook</a> to request.</p>
+  {% endif %}
+  {% for it in items %}
+  <div class="drow">
+    <div class="dcover small">
+      {% if it.cover %}<img src="{{ it.cover }}" alt="" loading="lazy">{% else %}<div class="ph">♪</div>{% endif %}
+    </div>
+    <div class="dmeta">
+      <div class="dtitle">{{ it.title }}</div>
+      <div class="dauthor">{{ it.author or 'Unknown author' }}</div>
+      {% if it.error %}<div class="dsub err-text">{{ it.error }}</div>{% endif %}
+    </div>
+    <div class="daction">
+      <span class="badge {{ badges.get(it.status, 'muted') }}">{{ status_labels.get(it.status, it.status) }}</span>
+    </div>
+  </div>
+  {% endfor %}
+</section>
+{% endblock %}

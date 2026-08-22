@@ -25,6 +25,7 @@ from starlette.middleware.sessions import SessionMiddleware
 
 from .. import __version__, db, settings
 from ..clients.abs import ABS
+from ..clients.audible import Audible
 from ..core import auth, worker
 
 HERE = Path(__file__).parent
@@ -71,7 +72,7 @@ class Guard(BaseHTTPMiddleware):
                     resp = (RedirectResponse("/login", status_code=303)
                             if _wants_html(request) else Response("Unauthorized", 401))
                 elif _is_admin_path(path) and not auth.is_admin(user):
-                    resp = (RedirectResponse("/library", status_code=303)
+                    resp = (RedirectResponse("/discover", status_code=303)
                             if _wants_html(request) else Response("Forbidden", 403))
                 else:
                     request.state.user = user
@@ -100,8 +101,14 @@ def _startup() -> None:
 
 
 STATUS_BADGES = {
-    "pending": "wait", "searching": "wait", "downloading": "busy", "importing": "busy",
+    "awaiting_approval": "wait", "pending": "wait", "searching": "wait",
+    "downloading": "busy", "importing": "busy",
     "done": "ok", "no_results": "warn", "failed": "err", "skipped": "muted",
+}
+STATUS_LABELS = {
+    "awaiting_approval": "awaiting approval", "pending": "queued", "searching": "searching",
+    "downloading": "downloading", "importing": "importing", "done": "in your library",
+    "no_results": "not found on Soulseek", "failed": "failed", "skipped": "skipped",
 }
 
 
@@ -123,7 +130,7 @@ def _ctx(request: Request, **extra: Any) -> dict[str, Any]:
     ctx = {
         "request": request, "version": __version__,
         "instance": settings.get("instance_name") or "Soulbridge",
-        "wstatus": worker.STATUS, "badges": STATUS_BADGES,
+        "wstatus": worker.STATUS, "badges": STATUS_BADGES, "status_labels": STATUS_LABELS,
         "library_available": bool(settings.get("abs_url") and settings.get("abs_api_key")
                                   and settings.get("abs_library_id")),
         "user": user, "is_admin": auth.is_admin(user),
@@ -362,6 +369,45 @@ def item_retry(item_id: int):
 def item_skip(item_id: int):
     db.update_item(item_id, status="skipped")
     return RedirectResponse("/", status_code=303)
+
+
+@app.get("/discover", response_class=HTMLResponse)
+def discover_page(request: Request, q: str = ""):
+    return templates.TemplateResponse(request, "discover.html", _ctx(request, q=q, results=None))
+
+
+@app.post("/discover", response_class=HTMLResponse, dependencies=[Depends(csrf_protect)])
+def discover_search(request: Request, q: str = Form(...)):
+    aud = Audible(settings.get("audible_region") or "us")
+    results = aud.search(q)
+    aud.close()
+    for r in results:
+        ex = db.get_item_by_source("user", r["asin"]) if r.get("asin") else None
+        r["requested_status"] = ex["status"] if ex else None
+    return templates.TemplateResponse(request, "discover.html", _ctx(request, q=q, results=results))
+
+
+@app.post("/request", dependencies=[Depends(csrf_protect)])
+def do_request(request: Request, asin: str = Form(...), title: str = Form(...),
+               author: str = Form(""), narrator: str = Form(""), cover: str = Form(""),
+               year: str = Form("")):
+    user = request.state.user
+    status = "pending" if auth.is_trusted(user) else "awaiting_approval"
+    item_id = db.upsert_item("user", asin, title=title, author=author, narrator=narrator,
+                             cover=cover or None, status=status, requested_by=user["username"])
+    if status == "pending":
+        worker.wake()
+        db.log_event(f"{user['username']} requested '{title}'", item_id=item_id)
+    else:
+        db.log_event(f"{user['username']} requested '{title}' (awaiting approval)", item_id=item_id)
+    return RedirectResponse("/requests", status_code=303)
+
+
+@app.get("/requests", response_class=HTMLResponse)
+def my_requests(request: Request):
+    user = request.state.user
+    mine = db.list_items_by_user(user["username"])
+    return templates.TemplateResponse(request, "requests.html", _ctx(request, items=mine))
 
 
 @app.get("/tags", response_class=HTMLResponse)

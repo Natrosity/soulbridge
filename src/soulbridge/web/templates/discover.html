@@ -1,0 +1,54 @@
+{% extends "base.html" %}
+{% block title %}Request · {{ instance }}{% endblock %}
+{% block content %}
+<section class="panel">
+  <h2>Request an audiobook</h2>
+  <form method="post" action="/discover" class="searchform">
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+    <input type="text" name="q" placeholder="Search by title, author, or narrator" value="{{ q }}" required autofocus>
+    <button class="btn primary" type="submit">Search</button>
+  </form>
+</section>
+
+{% if results is not none %}
+<section class="panel">
+  <h2>Results <span class="muted">({{ results|length }})</span></h2>
+  {% if not results %}<p class="empty">No matches on Audible. Try different words.</p>{% endif %}
+  {% for b in results %}
+  <div class="drow">
+    <div class="dcover">
+      {% if b.cover %}<img src="{{ b.cover }}" alt="" loading="lazy">{% else %}<div class="ph">♪</div>{% endif %}
+    </div>
+    <div class="dmeta">
+      <div class="dtitle">{{ b.title }}{% if b.subtitle %}<span class="dsubtitle">: {{ b.subtitle }}</span>{% endif %}</div>
+      <div class="dauthor">{{ b.authors | join(', ') or 'Unknown author' }}</div>
+      <div class="dsub">
+        {% if b.narrators %}Read by {{ b.narrators | join(', ') }}{% endif %}
+      </div>
+      <div class="dsub2">
+        {% if b.series %}{{ b.series }}{% endif %}
+        {% if b.year %}{% if b.series %} · {% endif %}{{ b.year }}{% endif %}
+        {% if b.runtime_min %} · {{ (b.runtime_min // 60) }}h {{ b.runtime_min % 60 }}m{% endif %}
+      </div>
+    </div>
+    <div class="daction">
+      {% if b.requested_status %}
+        <span class="badge {{ badges.get(b.requested_status, 'muted') }}">{{ status_labels.get(b.requested_status, b.requested_status) }}</span>
+      {% else %}
+        <form method="post" action="/request">
+          <input type="hidden" name="csrf" value="{{ csrf }}">
+          <input type="hidden" name="asin" value="{{ b.asin }}">
+          <input type="hidden" name="title" value="{{ b.title }}">
+          <input type="hidden" name="author" value="{{ b.authors | join(', ') }}">
+          <input type="hidden" name="narrator" value="{{ b.narrators | join(', ') }}">
+          <input type="hidden" name="cover" value="{{ b.cover or '' }}">
+          <input type="hidden" name="year" value="{{ b.year or '' }}">
+          <button class="btn primary sm" type="submit">Request</button>
+        </form>
+      {% endif %}
+    </div>
+  </div>
+  {% endfor %}
+</section>
+{% endif %}
+{% endblock %}

@@ -14,9 +14,10 @@
   <a class="brand" href="/"><span class="brand-mark">◈</span> {{ instance }}</a>
   {% if user %}
   <nav>
-    {% if is_admin %}<a href="/">Dashboard</a><a href="/search">Search</a>{% endif %}
+    <a href="/discover">Request</a>
+    <a href="/requests">My&nbsp;Requests</a>
     {% if library_available %}<a href="/library">Library</a>{% endif %}
-    {% if is_admin %}<a href="/tags">Tags</a>{% endif %}
+    {% if is_admin %}<a href="/">Dashboard</a><a href="/search">Search</a><a href="/tags">Tags</a>{% endif %}
   </nav>
   <div class="usermenu">
     {% if is_admin %}<a href="/settings">Server&nbsp;Settings</a><a href="/users">Users</a>{% endif %}
