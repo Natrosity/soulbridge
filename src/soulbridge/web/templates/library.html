@@ -2,16 +2,33 @@
 {% block title %}Library · {{ instance }}{% endblock %}
 {% block main_class %}wide{% endblock %}
 {% block content %}
+{% set sort_labels = {'added': 'Recently added', 'title': 'Title',
+                      'author': 'Author surname', 'released': 'Recently released'} %}
 <div class="libhead">
   <h1>Library</h1>
-  {% if configured %}<span class="muted">{{ total }} in Audiobookshelf</span>{% endif %}
+  {% if configured %}<span class="muted">
+    {% if searching %}{{ total }} match{{ '' if total == 1 else 'es' }} for “{{ q }}”{% else %}{{ total }} in Audiobookshelf{% endif %}
+  </span>{% endif %}
 </div>
+
+{% if configured %}
+<form method="get" action="/library" class="libcontrols">
+  <input type="search" name="q" value="{{ q }}" placeholder="Search this library by title, author, series…">
+  <label class="libsort">Sort
+    <select name="sort" data-autosubmit>
+      {% for s in sorts %}<option value="{{ s }}" {{ 'selected' if s == sort }}>{{ sort_labels.get(s, s) }}</option>{% endfor %}
+    </select>
+  </label>
+  <button class="btn primary" type="submit" data-busy="Searching…">Search</button>
+  {% if searching %}<a class="btn ghost" href="/library">Clear</a>{% endif %}
+</form>
+{% endif %}
 
 {% if not configured %}
   <p class="empty">Connect Audiobookshelf in <a href="/settings">Settings</a> (URL, API key, and
     library id) to browse what you already have here.</p>
 {% elif not items %}
-  <p class="empty">No books found in that Audiobookshelf library.</p>
+  <p class="empty">{% if searching %}No library books match “{{ q }}”.{% else %}No books found in that Audiobookshelf library.{% endif %}</p>
 {% endif %}
 
 {% if items %}
@@ -36,9 +53,9 @@
 
 {% if pages > 1 %}
 <div class="pager">
-  {% if page > 0 %}<a class="btn" href="/library?page={{ page - 1 }}">← Prev</a>{% endif %}
+  {% if page > 0 %}<a class="btn" href="/library?page={{ page - 1 }}&sort={{ sort }}">← Prev</a>{% endif %}
   <span class="muted">Page {{ page + 1 }} of {{ pages }}</span>
-  {% if page + 1 < pages %}<a class="btn" href="/library?page={{ page + 1 }}">Next →</a>{% endif %}
+  {% if page + 1 < pages %}<a class="btn" href="/library?page={{ page + 1 }}&sort={{ sort }}">Next →</a>{% endif %}
 </div>
 {% endif %}
 {% endif %}

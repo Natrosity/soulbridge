@@ -27,7 +27,7 @@ from starlette.middleware.sessions import SessionMiddleware
 from .. import __version__, db, settings
 from ..clients import notify, plextv
 from ..clients.abr import ABR
-from ..clients.abs import ABS
+from ..clients.abs import ABS, library_key
 from ..clients.audible import Audible
 from ..clients.plex import Plex
 from ..core import auth, worker
@@ -112,12 +112,14 @@ def _startup() -> None:
 
 
 STATUS_BADGES = {
-    "awaiting_approval": "wait", "selecting": "wait", "pending": "wait", "searching": "wait",
+    "awaiting_approval": "wait", "scheduled": "wait", "selecting": "wait",
+    "pending": "wait", "searching": "wait",
     "downloading": "busy", "importing": "busy",
     "done": "ok", "no_results": "warn", "failed": "err", "skipped": "muted", "denied": "muted",
 }
 STATUS_LABELS = {
-    "awaiting_approval": "awaiting approval", "selecting": "choosing a source",
+    "awaiting_approval": "awaiting approval", "scheduled": "awaiting release",
+    "selecting": "choosing a source",
     "pending": "queued", "searching": "searching",
     "downloading": "downloading", "importing": "importing", "done": "in your library",
     "no_results": "not found on Soulseek", "failed": "failed", "skipped": "skipped",
@@ -437,7 +439,7 @@ def _password_problem(username: str, password: str, confirm: str, check_user: bo
 def _dashboard_ctx(request: Request) -> dict[str, Any]:
     return _ctx(
         request,
-        active=db.list_items(statuses=["selecting", "pending", "searching", "downloading", "importing"]),
+        active=db.list_items(statuses=["scheduled", "selecting", "pending", "searching", "downloading", "importing"]),
         attention=db.list_items(statuses=["no_results", "failed"]),
         done=db.list_items(statuses=["done"], limit=30),
         counts=db.counts_by_status(), events=db.recent_events(50),
@@ -516,11 +518,17 @@ def item_approve(request: Request, item_id: int):
         raise HTTPException(404)
     if item["status"] != "awaiting_approval":
         return RedirectResponse("/requests/all", status_code=303)   # already handled
-    # standard-user requests are stored mode=auto, so approval queues an auto-grab
-    db.update_item(item_id, status="pending", attempts=0, error=None)
-    worker.wake()
+    # standard-user requests are stored mode=auto, so approval queues an auto-grab —
+    # unless the book isn't out yet, in which case hold it until its release date.
+    rd = (item.get("release_date") or "").strip()
+    scheduled = bool(rd and rd > time.strftime("%Y-%m-%d", time.gmtime()))
+    db.update_item(item_id, status="scheduled" if scheduled else "pending",
+                   attempts=0, error=None)
+    if not scheduled:
+        worker.wake()
     db.log_event(f"{admin['username']} approved '{item['title']}'"
-                 f" (requested by {item.get('requested_by') or 'unknown'})", item_id=item_id)
+                 + (f" — scheduled for {rd}" if scheduled else "")
+                 + f" (requested by {item.get('requested_by') or 'unknown'})", item_id=item_id)
     return RedirectResponse("/requests/all", status_code=303)
 
 
@@ -632,10 +640,71 @@ def _quota_message(user: dict[str, Any]) -> Optional[str]:
     return None
 
 
+# cached discovery aids
+_LIB_INDEX: dict[str, Any] = {}                 # {ts, asins, keys}
+_BROWSE: dict[str, dict[str, Any]] = {}         # sort -> {ts, items}
+HERO_ROWS = (("Bestsellers", "BestSellers"), ("New & upcoming", "-ReleaseDate"))
+
+
+def _library_index() -> tuple[set, set]:
+    """(asins, title|surname keys) of the ABS library, cached for 5 min."""
+    url, key, lib = settings.get("abs_url"), settings.get("abs_api_key"), settings.get("abs_library_id")
+    if not (url and key and lib):
+        return set(), set()
+    c = _LIB_INDEX
+    if c.get("ts") and time.time() - c["ts"] < 300:
+        return c["asins"], c["keys"]
+    a = ABS(url, key)
+    asins, keys = a.library_index(lib)
+    a.close()
+    _LIB_INDEX.update(ts=time.time(), asins=asins, keys=keys)
+    return asins, keys
+
+
+def _mark_results(results: list[dict[str, Any]]) -> None:
+    """Flag each discover listing with its prior-request status and whether the
+    book is already in the Audiobookshelf library (so we don't allow a duplicate)."""
+    asins, keys = _library_index()
+    today = time.strftime("%Y-%m-%d", time.gmtime())
+    for r in results:
+        if "requested_status" not in r:
+            ex = db.get_item_by_source("user", r["asin"]) if r.get("asin") else None
+            r["requested_status"] = ex["status"] if ex else None
+        author = (r.get("authors") or [""])[0] if r.get("authors") else ""
+        k = library_key(r.get("title"), author)
+        r["in_library"] = bool((r.get("asin") and r["asin"] in asins) or (k and k in keys))
+        rd = r.get("release_date") or ""
+        r["upcoming"] = bool(rd and rd > today)
+
+
+def _hero_rows() -> list[dict[str, Any]]:
+    """Curated Audible browse rows for the discovery page (cached 6h; status marks
+    are refreshed per request)."""
+    region = settings.get("audible_region") or "us"
+    rows: list[dict[str, Any]] = []
+    for label, sort in HERO_ROWS:
+        c = _BROWSE.get(sort)
+        if c and time.time() - c["ts"] < 6 * 3600:
+            items = c["items"]
+        else:
+            aud = Audible(region)
+            items = aud.browse(sort, 18)
+            aud.close()
+            if items:
+                _BROWSE[sort] = {"ts": time.time(), "items": items}
+            elif c:
+                items = c["items"]                  # keep last-good on a transient failure
+        if items:
+            deco = [dict(it) for it in items]       # fresh status marks each render
+            _mark_results(deco)
+            rows.append({"label": label, "books": deco})   # not 'items' (Jinja dict-method clash)
+    return rows
+
+
 @app.get("/discover", response_class=HTMLResponse)
 def discover_page(request: Request, q: str = "", err: str = ""):
     return templates.TemplateResponse(request, "discover.html", _ctx(
-        request, q=q, results=None, default_mode=_default_mode(),
+        request, q=q, results=None, heroes=_hero_rows(), default_mode=_default_mode(),
         can_interactive=auth.is_trusted(request.state.user),
         error=(_quota_message(request.state.user) if err == "quota" else None)))
 
@@ -645,11 +714,9 @@ def discover_search(request: Request, q: str = Form(...)):
     aud = Audible(settings.get("audible_region") or "us")
     results = aud.search(q)
     aud.close()
-    for r in results:
-        ex = db.get_item_by_source("user", r["asin"]) if r.get("asin") else None
-        r["requested_status"] = ex["status"] if ex else None
+    _mark_results(results)
     return templates.TemplateResponse(request, "discover.html", _ctx(
-        request, q=q, results=results, default_mode=_default_mode(),
+        request, q=q, results=results, heroes=None, default_mode=_default_mode(),
         can_interactive=auth.is_trusted(request.state.user),
         error=_quota_message(request.state.user)))
 
@@ -657,28 +724,38 @@ def discover_search(request: Request, q: str = Form(...)):
 @app.post("/request", dependencies=[Depends(csrf_protect)])
 def do_request(request: Request, asin: str = Form(...), title: str = Form(...),
                author: str = Form(""), narrator: str = Form(""), cover: str = Form(""),
-               year: str = Form(""), mode: str = Form("auto")):
+               year: str = Form(""), mode: str = Form("auto"), release_date: str = Form("")):
     user = request.state.user
     # Enforce the per-user open-request quota (admins exempt; 0 = unlimited). A book
     # already requested is an upsert (no new row), so it never trips the quota.
     if not db.get_item_by_source("user", asin) and _quota_message(user):
         return RedirectResponse("/discover?err=quota", status_code=303)
+    release_date = (release_date or "").strip()[:10] or None
+    upcoming = bool(release_date and release_date > time.strftime("%Y-%m-%d", time.gmtime()))
     # Interactive picking is only meaningful for users who can auto-download; a
     # standard user's request is held for approval regardless of the mode chosen.
     interactive = mode == "interactive" and auth.is_trusted(user)
     if not auth.is_trusted(user):
         status, mode = "awaiting_approval", "auto"
+    elif upcoming:
+        status, mode = "scheduled", "auto"   # not released yet — hold until the date
     elif interactive:
         status = "selecting"     # worker skips this; the user picks a source next
     else:
         status = "pending"
     item_id = db.upsert_item("user", asin, title=title, author=author, narrator=narrator,
                              cover=cover or None, status=status, mode=mode,
-                             requested_by=user["username"])
+                             release_date=release_date, requested_by=user["username"])
     if status == "selecting":
         db.log_event(f"{user['username']} requested '{title}' (choosing a source)", item_id=item_id)
         return RedirectResponse(f"/request/{item_id}/candidates", status_code=303)
-    if status == "pending":
+    if status == "scheduled":
+        db.log_event(f"{user['username']} requested '{title}' — scheduled for {release_date}",
+                     item_id=item_id)
+        notify.event("request", "New request — scheduled",
+                     f"{user['username']} requested '{title}'; it releases {release_date} "
+                     "and will be searched for then.")
+    elif status == "pending":
         worker.wake()
         db.log_event(f"{user['username']} requested '{title}'", item_id=item_id)
         notify.event("request", "New request", f"{user['username']} requested '{title}'")
@@ -756,19 +833,37 @@ def tags_page(request: Request):
     ))
 
 
+# library sort options: label -> (ABS sort key, descending?)
+LIBRARY_SORTS = {
+    "added": ("addedAt", True),
+    "title": ("media.metadata.title", False),
+    "author": ("media.metadata.authorNameLF", False),
+    "released": ("media.metadata.publishedYear", True),
+}
+
+
 # -------------------------------------------------------------------- library
 @app.get("/library", response_class=HTMLResponse)
-def library_page(request: Request, page: int = 0):
+def library_page(request: Request, page: int = 0, q: str = "", sort: str = "added"):
     url, key, lib = settings.get("abs_url"), settings.get("abs_api_key"), settings.get("abs_library_id")
     configured = bool(url and key and lib)
+    q = (q or "").strip()
+    sort = sort if sort in LIBRARY_SORTS else "added"
     per, items, total = 48, [], 0
+    searching = bool(q)
     if configured:
         a = ABS(url, key)
-        items, total = a.library_items(lib, limit=per, page=max(0, page), sort="addedAt", desc=True)
+        if searching:                               # search ignores paging/sort (ABS ranks it)
+            items = a.search_items(lib, q, limit=per)
+            total = len(items)
+        else:
+            skey, desc = LIBRARY_SORTS[sort]
+            items, total = a.library_items(lib, limit=per, page=max(0, page), sort=skey, desc=desc)
         a.close()
-    pages = (total + per - 1) // per if per else 1
+    pages = 1 if searching else ((total + per - 1) // per if per else 1)
     return templates.TemplateResponse(request, "library.html", _ctx(
         request, items=items, total=total, page=max(0, page), pages=pages, configured=configured,
+        q=q, sort=sort, searching=searching, sorts=list(LIBRARY_SORTS.keys()),
     ))
 
 

@@ -133,6 +133,18 @@ and audited, because the app becomes internet-facing.
 - 2026-08-23: Phase 6 complete (v0.10.0) — Apprise notifications (request/complete/
   failure + test button; new `apprise` dep → image rebuild), ABR history import,
   cutover-ready. All six phases shipped; ABR retirement is now an operator choice.
+- 2026-08-23: Post-launch enhancements (v0.11.0) — (1) **library dedup**: discovery
+  now cross-checks the real ABS library (ASIN + title|author-surname key, cached 5 min)
+  and flags already-owned books ("In your library", no request button); (2) **library
+  search + sort** (ABS search endpoint + sort by title / author surname / recently
+  released / recently added); (3) **discovery hero rows** — cached Audible browse
+  ("Bestsellers", "New & upcoming"), one-click request; (4) **release-date gating** —
+  future-dated requests land as `scheduled` and the worker (`_release_due`) only searches
+  once the release date passes. New `items.release_date` column.
+  - **Deferred (future): file renaming** — rename/organise the actual downloaded audio
+    files (not just the folder). Needs a proven naming format AND smart safeguards so
+    multi-file books don't get chapters mis-ordered/mislabelled; parked until that's
+    designed. (ABR-sourced unreleased books aren't release-gated yet — ABR is retiring.)
 - 2026-08-23: Final audit (v0.10.1) — all six phases done, then a functionality/polish/
   security pass. Verified live: every POST is CSRF-protected; admin surfaces reject
   standard users (GET + POST); unauthenticated is bounced; request ownership is enforced

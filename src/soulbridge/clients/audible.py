@@ -23,13 +23,12 @@ class Audible:
     def close(self) -> None:
         self._c.close()
 
-    def search(self, keywords: str, num: int = 24) -> list[dict[str, Any]]:
+    def _products(self, params: dict[str, Any]) -> list[dict[str, Any]]:
+        base = {"response_groups": RESPONSE_GROUPS, "image_sizes": "500",
+                "content_type": "Product"}
+        base.update(params)
         try:
-            r = self._c.get(self.base, params={
-                "keywords": keywords, "num_results": min(max(num, 1), 40),
-                "products_sort_by": "Relevance", "response_groups": RESPONSE_GROUPS,
-                "image_sizes": "500",
-            })
+            r = self._c.get(self.base, params=base)
             if r.status_code >= 400:
                 return []
             products = r.json().get("products", [])
@@ -41,6 +40,7 @@ class Audible:
             if not title:
                 continue
             series = p.get("series") or []
+            rel = p.get("release_date") or ""
             out.append({
                 "asin": p.get("asin"),
                 "title": title,
@@ -49,7 +49,17 @@ class Audible:
                 "narrators": [n["name"] for n in p.get("narrators", []) if n.get("name")],
                 "series": series[0].get("title") if series else None,
                 "cover": (p.get("product_images") or {}).get("500"),
-                "year": (p.get("release_date") or "")[:4] or None,
+                "year": rel[:4] or None,
+                "release_date": rel or None,          # full YYYY-MM-DD (for release gating)
                 "runtime_min": p.get("runtime_length_min"),
             })
         return out
+
+    def search(self, keywords: str, num: int = 24) -> list[dict[str, Any]]:
+        return self._products({"keywords": keywords, "num_results": min(max(num, 1), 40),
+                               "products_sort_by": "Relevance"})
+
+    def browse(self, sort_by: str = "BestSellers", num: int = 20) -> list[dict[str, Any]]:
+        """Keyword-less catalog browse for the discovery 'hero' rows.
+        sort_by: 'BestSellers' (popular) or '-ReleaseDate' (new & upcoming)."""
+        return self._products({"num_results": min(max(num, 1), 40), "products_sort_by": sort_by})

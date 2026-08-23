@@ -33,6 +33,7 @@ CREATE TABLE IF NOT EXISTS items (
     error          TEXT,
     attempts       INTEGER NOT NULL DEFAULT 0,     -- search/grab attempts (for retry cap)
     mode           TEXT NOT NULL DEFAULT 'auto',   -- auto | interactive (how the source is chosen)
+    release_date   TEXT,                           -- YYYY-MM-DD; if future, hold until then
     requested_by   TEXT,
     created_at     TEXT NOT NULL,
     updated_at     TEXT NOT NULL,
@@ -87,6 +88,8 @@ def init() -> None:
             c.execute("ALTER TABLE items ADD COLUMN attempts INTEGER NOT NULL DEFAULT 0")
         if "mode" not in cols:
             c.execute("ALTER TABLE items ADD COLUMN mode TEXT NOT NULL DEFAULT 'auto'")
+        if "release_date" not in cols:
+            c.execute("ALTER TABLE items ADD COLUMN release_date TEXT")
 
 
 @contextmanager
@@ -185,7 +188,7 @@ def list_items_by_user(username: str, limit: int = 200) -> list[dict[str, Any]]:
 
 
 # Requests that still count against a user's quota (everything not terminal).
-OPEN_STATUSES = ("awaiting_approval", "selecting", "pending", "searching",
+OPEN_STATUSES = ("awaiting_approval", "scheduled", "selecting", "pending", "searching",
                  "downloading", "importing")
 
 

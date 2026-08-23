@@ -1,5 +1,83 @@
 {% extends "base.html" %}
 {% block title %}Request · {{ instance }}{% endblock %}
+
+{# hidden fields shared by every request form #}
+{% macro req_fields(b) %}
+  <input type="hidden" name="csrf" value="{{ csrf }}">
+  <input type="hidden" name="asin" value="{{ b.asin }}">
+  <input type="hidden" name="title" value="{{ b.title }}">
+  <input type="hidden" name="author" value="{{ b.authors | join(', ') }}">
+  <input type="hidden" name="narrator" value="{{ b.narrators | join(', ') }}">
+  <input type="hidden" name="cover" value="{{ b.cover or '' }}">
+  <input type="hidden" name="year" value="{{ b.year or '' }}">
+  <input type="hidden" name="release_date" value="{{ b.release_date or '' }}">
+{% endmacro %}
+
+{# full-width row used for search results #}
+{% macro result_row(b) %}
+<div class="drow">
+  <div class="dcover">
+    {% if b.cover %}<img src="{{ b.cover }}" alt="" loading="lazy">{% else %}<div class="ph">♪</div>{% endif %}
+  </div>
+  <div class="dmeta">
+    <div class="dtitle">{{ b.title }}{% if b.subtitle %}<span class="dsubtitle">: {{ b.subtitle }}</span>{% endif %}</div>
+    <div class="dauthor">{{ b.authors | join(', ') or 'Unknown author' }}</div>
+    <div class="dsub">{% if b.narrators %}Read by {{ b.narrators | join(', ') }}{% endif %}</div>
+    <div class="dsub2">
+      {% if b.series %}{{ b.series }}{% endif %}
+      {% if b.year %}{% if b.series %} · {% endif %}{{ b.year }}{% endif %}
+      {% if b.runtime_min %} · {{ (b.runtime_min // 60) }}h {{ b.runtime_min % 60 }}m{% endif %}
+      {% if b.upcoming %} · <span class="tag-upcoming">releases {{ b.release_date }}</span>{% endif %}
+    </div>
+  </div>
+  <div class="daction">
+    {% if b.in_library %}
+      <span class="badge ok">In your library</span>
+    {% elif b.requested_status %}
+      <span class="badge {{ badges.get(b.requested_status, 'muted') }}">{{ status_labels.get(b.requested_status, b.requested_status) }}</span>
+    {% else %}
+      <form method="post" action="/request" class="reqform">
+        {{ req_fields(b) }}
+        {% if b.upcoming %}
+          <button class="btn primary sm" type="submit" name="mode" value="auto" data-busy="Scheduling…">Request</button>
+        {% elif can_interactive %}
+          <button class="btn sm {{ 'primary' if default_mode == 'auto' else 'ghost' }}" type="submit" name="mode" value="auto" data-busy="Requesting…">Auto&nbsp;request</button>
+          <button class="btn sm {{ 'primary' if default_mode == 'interactive' else 'ghost' }}" type="submit" name="mode" value="interactive" data-busy="Searching…">Choose&nbsp;source…</button>
+        {% else %}
+          <button class="btn primary sm" type="submit" name="mode" value="auto">Request</button>
+        {% endif %}
+      </form>
+    {% endif %}
+  </div>
+</div>
+{% endmacro %}
+
+{# compact card used in the horizontal hero rows #}
+{% macro hero_card(b) %}
+<div class="herocard" title="{{ b.title }}{% if b.authors %} — {{ b.authors | join(', ') }}{% endif %}">
+  <div class="herocover">
+    {% if b.cover %}<img src="{{ b.cover }}" alt="" loading="lazy">{% else %}<div class="ph">♪</div>{% endif %}
+    {% if b.upcoming %}<span class="herobadge">{{ b.release_date }}</span>{% endif %}
+  </div>
+  <div class="herotitle">{{ b.title }}</div>
+  <div class="heroauthor">{{ b.authors | join(', ') or 'Unknown author' }}</div>
+  <div class="heroaction">
+    {% if b.in_library %}
+      <span class="badge ok sm">In library</span>
+    {% elif b.requested_status %}
+      <span class="badge {{ badges.get(b.requested_status, 'muted') }} sm">{{ status_labels.get(b.requested_status, b.requested_status) }}</span>
+    {% else %}
+      <form method="post" action="/request">
+        {{ req_fields(b) }}
+        <button class="btn primary sm" type="submit" name="mode" value="auto"
+                data-busy="{{ 'Scheduling…' if b.upcoming else 'Requesting…' }}">
+          {{ 'Pre-order' if b.upcoming else 'Request' }}</button>
+      </form>
+    {% endif %}
+  </div>
+</div>
+{% endmacro %}
+
 {% block content %}
 {% if error %}<div class="banner err">{{ error }}</div>{% endif %}
 <section class="panel">
@@ -11,50 +89,22 @@
   </form>
 </section>
 
+{% if heroes %}
+{% for row in heroes %}
+<section class="panel">
+  <h2>{{ row.label }}</h2>
+  <div class="herorow">
+    {% for b in row.books %}{{ hero_card(b) }}{% endfor %}
+  </div>
+</section>
+{% endfor %}
+{% endif %}
+
 {% if results is not none %}
 <section class="panel">
   <h2>Results <span class="muted">({{ results|length }})</span></h2>
   {% if not results %}<p class="empty">No matches on Audible. Try different words.</p>{% endif %}
-  {% for b in results %}
-  <div class="drow">
-    <div class="dcover">
-      {% if b.cover %}<img src="{{ b.cover }}" alt="" loading="lazy">{% else %}<div class="ph">♪</div>{% endif %}
-    </div>
-    <div class="dmeta">
-      <div class="dtitle">{{ b.title }}{% if b.subtitle %}<span class="dsubtitle">: {{ b.subtitle }}</span>{% endif %}</div>
-      <div class="dauthor">{{ b.authors | join(', ') or 'Unknown author' }}</div>
-      <div class="dsub">
-        {% if b.narrators %}Read by {{ b.narrators | join(', ') }}{% endif %}
-      </div>
-      <div class="dsub2">
-        {% if b.series %}{{ b.series }}{% endif %}
-        {% if b.year %}{% if b.series %} · {% endif %}{{ b.year }}{% endif %}
-        {% if b.runtime_min %} · {{ (b.runtime_min // 60) }}h {{ b.runtime_min % 60 }}m{% endif %}
-      </div>
-    </div>
-    <div class="daction">
-      {% if b.requested_status %}
-        <span class="badge {{ badges.get(b.requested_status, 'muted') }}">{{ status_labels.get(b.requested_status, b.requested_status) }}</span>
-      {% else %}
-        <form method="post" action="/request" class="reqform">
-          <input type="hidden" name="csrf" value="{{ csrf }}">
-          <input type="hidden" name="asin" value="{{ b.asin }}">
-          <input type="hidden" name="title" value="{{ b.title }}">
-          <input type="hidden" name="author" value="{{ b.authors | join(', ') }}">
-          <input type="hidden" name="narrator" value="{{ b.narrators | join(', ') }}">
-          <input type="hidden" name="cover" value="{{ b.cover or '' }}">
-          <input type="hidden" name="year" value="{{ b.year or '' }}">
-          {% if can_interactive %}
-            <button class="btn sm {{ 'primary' if default_mode == 'auto' else 'ghost' }}" type="submit" name="mode" value="auto" data-busy="Requesting…" title="Grab the best Soulseek match automatically">Auto&nbsp;request</button>
-            <button class="btn sm {{ 'primary' if default_mode == 'interactive' else 'ghost' }}" type="submit" name="mode" value="interactive" data-busy="Searching…" title="Pick from ranked Soulseek candidates yourself">Choose&nbsp;source…</button>
-          {% else %}
-            <button class="btn primary sm" type="submit" name="mode" value="auto">Request</button>
-          {% endif %}
-        </form>
-      {% endif %}
-    </div>
-  </div>
-  {% endfor %}
+  {% for b in results %}{{ result_row(b) }}{% endfor %}
 </section>
 {% endif %}
 {% endblock %}

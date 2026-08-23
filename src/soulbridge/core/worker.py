@@ -369,6 +369,18 @@ def _discover_requests() -> None:
         abr.close()
 
 
+def _release_due() -> None:
+    """Promote 'scheduled' (not-yet-released) requests to 'pending' once their
+    release date has arrived, so they only get searched for after publication."""
+    today = time.strftime("%Y-%m-%d", time.gmtime())
+    for item in db.list_items(statuses=["scheduled"]):
+        rd = (item.get("release_date") or "").strip()
+        if not rd or rd <= today:
+            db.update_item(item["id"], status="pending", attempts=0, error=None)
+            db.log_event(f"'{item['title']}' has reached its release date — searching now",
+                         item_id=item["id"])
+
+
 def _update_connectivity() -> None:
     """Refresh cached reachability for optional media servers (shown in the UI).
     None means 'not configured' so the UI can hide the indicator entirely."""
@@ -402,6 +414,7 @@ def tick() -> None:
         pass
 
     _discover_requests()
+    _release_due()
 
     if settings.get_bool("auto_download"):
         for item in db.list_items(statuses=["pending"]):
