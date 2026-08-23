@@ -1,4 +1,4 @@
-# Soulbridge — example deployment.
+# Soulbridge: example deployment.
 # Mount the SAME media parent that slskd and your library share, so completed
 # Soulseek downloads can be moved into the library on one filesystem.
 services:
