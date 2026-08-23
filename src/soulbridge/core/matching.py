@@ -11,6 +11,9 @@ from typing import Any, Optional
 AUDIO_EXTS = (".m4b", ".m4a", ".mp3", ".flac", ".ogg", ".opus")
 SPAM = ("sample", "summary", "workbook", "analysis of", "study guide", "abridged")
 STOP = {"the", "a", "an", "of", "and", "to", "in", "my", "is", "for"}
+# markers of a dramatised / full-cast edition (normalised form, no punctuation)
+DRAMATIZED = ("full cast", "dramatized", "dramatised", "multicast", "multi cast",
+              "graphic audio", "graphicaudio", "radio drama", "audio drama")
 
 
 # ligatures / special letters that NFKD does not decompose to ASCII
@@ -108,7 +111,8 @@ def group_responses(responses: list[dict[str, Any]]) -> list[Group]:
     return list(groups.values())
 
 
-def score_group(g: Group, title: str, author: str, prefs: dict[str, Any]) -> float:
+def score_group(g: Group, title: str, author: str, prefs: dict[str, Any],
+                edition: Optional[dict[str, Any]] = None) -> float:
     text = norm(g.directory + " " + " ".join(f["filename"] for f in g.files))
     want = tokens(title)
     if want:
@@ -151,14 +155,31 @@ def score_group(g: Group, title: str, author: str, prefs: dict[str, Any]) -> flo
         score -= 15
     # mild preference for fewer files (cleaner) among multi-file sets
     score -= min(len(g.files), 40) * 0.1
+
+    # --- edition affinity: nudge toward the specific edition that was requested ---
+    ed = edition or {}
+    narrator = norm(ed.get("narrator") or "")
+    nsurname = narrator.split()[-1] if narrator else ""
+    if nsurname and len(nsurname) >= 3 and nsurname in text:
+        score += 14                                  # this upload names the requested narrator
+    yr = str(ed.get("year") or "")
+    if re.fullmatch(r"\d{4}", yr) and yr in text:
+        score += 8
+    # dramatised/full-cast vs standard: don't grab the wrong kind of edition
+    req_drama = any(m in norm(title) for m in DRAMATIZED)
+    cand_drama = any(m in text for m in DRAMATIZED)
+    if cand_drama and not req_drama:
+        score -= 25                                  # a full-cast upload but a standard was requested
+    elif req_drama and not cand_drama:
+        score -= 12                                  # requested a full-cast edition; this looks standard
     return score
 
 
 def pick_best(responses: list[dict[str, Any]], title: str, author: str,
-              prefs: dict[str, Any]) -> Optional[Group]:
+              prefs: dict[str, Any], edition: Optional[dict[str, Any]] = None) -> Optional[Group]:
     groups = group_responses(responses)
     for g in groups:
-        g.score = score_group(g, title, author, prefs)
+        g.score = score_group(g, title, author, prefs, edition)
     ranked = sorted((g for g in groups if g.score > 0), key=lambda g: g.score, reverse=True)
     return ranked[0] if ranked else None
 

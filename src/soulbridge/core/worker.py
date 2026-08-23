@@ -70,7 +70,8 @@ def _find_local(basename: str, root: str) -> Optional[str]:
 
 
 # ---------- public actions ----------
-def manual_search(title: str, author: str = "") -> list[dict[str, Any]]:
+def manual_search(title: str, author: str = "",
+                  edition: Optional[dict[str, Any]] = None) -> list[dict[str, Any]]:
     """Search Soulseek and return ranked candidate groups (for the web UI)."""
     sk = _slskd()
     try:
@@ -79,11 +80,11 @@ def manual_search(title: str, author: str = "") -> list[dict[str, Any]]:
         for q in matching.build_queries(title, author):
             responses = sk.search(q, wait=35, floor=20)
             groups = matching.group_responses(responses)
-            if any(matching.score_group(g, title, author, prefs) > 0 for g in groups):
+            if any(matching.score_group(g, title, author, prefs, edition) > 0 for g in groups):
                 break
         groups = matching.group_responses(responses)
         for g in groups:
-            g.score = matching.score_group(g, title, author, prefs)
+            g.score = matching.score_group(g, title, author, prefs, edition)
         ranked = sorted(groups, key=lambda g: g.score, reverse=True)
         return [
             {
@@ -156,9 +157,11 @@ def process_item(item_id: int) -> None:
         db.update_item(item_id, status="searching", attempts=attempts, error=None)
 
         prefs = matching.default_prefs(settings)
+        edition = {"narrator": item.get("narrator"),
+                   "year": (item.get("release_date") or "")[:4]}
         best = None
         for q in matching.build_queries(title, author):
-            best = matching.pick_best(sk.search(q), title, author, prefs)
+            best = matching.pick_best(sk.search(q), title, author, prefs, edition)
             if best:
                 break
         if not best:
@@ -245,6 +248,34 @@ def _import(item: dict[str, Any]) -> None:
     _post_import(item, dest)
 
 
+_LANG_MARKERS = {
+    "spanish": ("spanish", "espanol"), "french": ("french", "francais"),
+    "german": ("german", "deutsch"), "italian": ("italian", "italiano"),
+    "portuguese": ("portuguese", "portugues"), "japanese": ("japanese",),
+    "dutch": ("dutch", "nederlands"), "russian": ("russian",),
+}
+
+
+def _edition_warning(item: dict[str, Any], meta: dict[str, Any]) -> None:
+    """Best-effort sanity check that the grabbed files match the requested edition —
+    logs a warning (never blocks) on an obvious language or dramatised/standard clash."""
+    blob = matching.norm((item.get("slskd_dir") or "") + " "
+                         + " ".join(json.loads(item.get("chosen_files") or "[]")))
+    lang = (meta.get("language") or "").strip().lower()
+    if lang:
+        for language, markers in _LANG_MARKERS.items():
+            if language != lang and any(m in blob for m in markers):
+                db.log_event(f"Heads up: '{item['title']}' download looks {language.title()}, but "
+                             f"the requested edition is {lang.title()} — verify the edition.",
+                             "warn", item["id"])
+                return
+    req_drama = any(m in matching.norm(item["title"]) for m in matching.DRAMATIZED)
+    cand_drama = any(m in blob for m in matching.DRAMATIZED)
+    if cand_drama and not req_drama:
+        db.log_event(f"Heads up: '{item['title']}' download looks like a dramatised/full-cast "
+                     "edition, but a standard edition was requested.", "warn", item["id"])
+
+
 def _write_metadata(item: dict[str, Any], dest: str, files: list[str]) -> None:
     """Tag the imported files from the Audible listing (best-effort)."""
     if not settings.get_bool("write_metadata"):
@@ -268,6 +299,7 @@ def _write_metadata(item: dict[str, Any], dest: str, files: list[str]) -> None:
     finally:
         aud.close()
 
+    _edition_warning(item, meta)                  # flag an obvious edition/language mismatch
     cover_url = meta.get("cover_url") or item.get("cover")
     overwrite = settings.get_bool("overwrite_tags")
     embed = settings.get_bool("embed_cover")

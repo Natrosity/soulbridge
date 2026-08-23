@@ -121,15 +121,6 @@ class ABS:
             page += 1
         return asins, keys
 
-
-def library_key(title: str | None, author: str | None) -> str:
-    """A loose title|author-surname key for matching a listing to a library book
-    when ASINs differ or are missing. Kept here so callers match consistently."""
-    from ..core.matching import norm
-    t = norm(title or "")
-    surname = (norm(author or "").split() or [""])[-1]
-    return f"{t}|{surname}" if t else ""
-
     def item_cover(self, item_id: str) -> tuple[bytes | None, str]:
         try:
             r = self._c.get(f"{self.base}/api/items/{item_id}/cover")
@@ -138,3 +129,12 @@ def library_key(title: str | None, author: str | None) -> str:
         except Exception:
             pass
         return None, "image/jpeg"
+
+
+def library_key(title: str | None, author: str | None) -> str:
+    """A loose title|author-surname key for matching a listing to a library book
+    when ASINs differ or are missing. Kept here so callers match consistently."""
+    from ..core.matching import norm
+    t = norm(title or "")
+    surname = (norm(author or "").split() or [""])[-1]
+    return f"{t}|{surname}" if t else ""

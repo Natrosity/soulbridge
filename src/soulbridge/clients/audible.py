@@ -15,6 +15,11 @@ DOMAINS = {
 RESPONSE_GROUPS = "product_desc,product_attrs,media,series,contributors"
 
 
+def product_url(asin: str, region: str = "us") -> str:
+    """Public Audible product page for an ASIN (redirects to the full slug URL)."""
+    return f"https://www.audible.{DOMAINS.get(region, 'com')}/pd/{asin}" if asin else ""
+
+
 class Audible:
     def __init__(self, region: str = "us", timeout: float = 20.0):
         self.base = f"https://api.audible.{DOMAINS.get(region, 'com')}/1.0/catalog/products"

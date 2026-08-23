@@ -20,7 +20,7 @@
     {% if b.cover %}<img src="{{ b.cover }}" alt="" loading="lazy">{% else %}<div class="ph">♪</div>{% endif %}
   </div>
   <div class="dmeta">
-    <div class="dtitle">{{ b.title }}{% if b.subtitle %}<span class="dsubtitle">: {{ b.subtitle }}</span>{% endif %}</div>
+    <div class="dtitle"><a class="titlelink" href="{{ b.audible_url }}" target="_blank" rel="noopener noreferrer">{{ b.title }}</a>{% if b.subtitle %}<span class="dsubtitle">: {{ b.subtitle }}</span>{% endif %}</div>
     <div class="dauthor">{{ b.authors | join(', ') or 'Unknown author' }}</div>
     <div class="dsub">{% if b.narrators %}Read by {{ b.narrators | join(', ') }}{% endif %}</div>
     <div class="dsub2">
@@ -39,7 +39,7 @@
       <form method="post" action="/request" class="reqform">
         {{ req_fields(b) }}
         {% if b.upcoming %}
-          <button class="btn primary sm" type="submit" name="mode" value="auto" data-busy="Scheduling…">Request</button>
+          <button class="btn primary sm" type="submit" name="mode" value="auto" data-busy="Saving…">Pre-Save</button>
         {% elif can_interactive %}
           <button class="btn sm {{ 'primary' if default_mode == 'auto' else 'ghost' }}" type="submit" name="mode" value="auto" data-busy="Requesting…">Auto&nbsp;request</button>
           <button class="btn sm {{ 'primary' if default_mode == 'interactive' else 'ghost' }}" type="submit" name="mode" value="interactive" data-busy="Searching…">Choose&nbsp;source…</button>
@@ -56,25 +56,29 @@
 {% macro hero_card(b) %}
 <div class="herocard" title="{{ b.title }}{% if b.authors %} — {{ b.authors | join(', ') }}{% endif %}">
   <div class="herocover">
-    {% if b.cover %}<img src="{{ b.cover }}" alt="" loading="lazy">{% else %}<div class="ph">♪</div>{% endif %}
+    <a class="herolink" href="{{ b.audible_url }}" target="_blank" rel="noopener noreferrer">
+      {% if b.cover %}<img src="{{ b.cover }}" alt="" loading="lazy">{% else %}<div class="ph">♪</div>{% endif %}
+    </a>
     {% if b.upcoming %}<span class="herobadge">{{ b.release_date }}</span>{% endif %}
+    <div class="heroreq">
+      {% if b.in_library %}
+        <span class="badge ok sm">In library</span>
+      {% elif b.requested_status %}
+        <span class="badge {{ badges.get(b.requested_status, 'muted') }} sm">{{ status_labels.get(b.requested_status, b.requested_status) }}</span>
+      {% else %}
+        <form method="post" action="/request">
+          {{ req_fields(b) }}
+          <button class="btn primary sm reqbtn" type="submit" name="mode" value="auto"
+                  data-busy="{{ 'Saving…' if b.upcoming else 'Requesting…' }}">
+            {{ 'Pre-Save' if b.upcoming else 'Request' }}</button>
+        </form>
+      {% endif %}
+    </div>
   </div>
-  <div class="herotitle">{{ b.title }}</div>
-  <div class="heroauthor">{{ b.authors | join(', ') or 'Unknown author' }}</div>
-  <div class="heroaction">
-    {% if b.in_library %}
-      <span class="badge ok sm">In library</span>
-    {% elif b.requested_status %}
-      <span class="badge {{ badges.get(b.requested_status, 'muted') }} sm">{{ status_labels.get(b.requested_status, b.requested_status) }}</span>
-    {% else %}
-      <form method="post" action="/request">
-        {{ req_fields(b) }}
-        <button class="btn primary sm" type="submit" name="mode" value="auto"
-                data-busy="{{ 'Scheduling…' if b.upcoming else 'Requesting…' }}">
-          {{ 'Pre-order' if b.upcoming else 'Request' }}</button>
-      </form>
-    {% endif %}
-  </div>
+  <a class="herometa" href="{{ b.audible_url }}" target="_blank" rel="noopener noreferrer">
+    <div class="herotitle">{{ b.title }}</div>
+    <div class="heroauthor">{{ b.authors | join(', ') or 'Unknown author' }}</div>
+  </a>
 </div>
 {% endmacro %}
 

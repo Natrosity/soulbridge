@@ -34,7 +34,7 @@
 {% if items %}
 <div class="libgrid">
   {% for b in items %}
-  <div class="libcard" title="{{ b.title }}{% if b.author %} — {{ b.author }}{% endif %}">
+  <a class="libcard" {% if b.audible_url %}href="{{ b.audible_url }}" target="_blank" rel="noopener noreferrer"{% endif %} title="{{ b.title }}{% if b.author %} — {{ b.author }}{% endif %}">
     <img src="/library/cover/{{ b.id }}" alt="" loading="lazy">
     <div class="libov">
       <div class="ov-title">{{ b.title }}</div>
@@ -47,7 +47,7 @@
         </div>
       </div>
     </div>
-  </div>
+  </a>
   {% endfor %}
 </div>
 

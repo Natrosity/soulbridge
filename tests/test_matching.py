@@ -60,6 +60,25 @@ def test_generic_one_word_title_requires_author():
     assert best and best.username == "book"
 
 
+def test_edition_prefers_requested_narrator():
+    resp = [
+        _resp("fry", True, [_f(r"x\Harry Potter and the Chamber of Secrets - Stephen Fry.m4b", 380_000_000)]),
+        _resp("dale", True, [_f(r"y\Harry Potter and the Chamber of Secrets - Jim Dale.m4b", 380_000_000)]),
+    ]
+    best = m.pick_best(resp, "Harry Potter and the Chamber of Secrets", "J.K. Rowling", PREFS,
+                       edition={"narrator": "Stephen Fry", "year": "2015"})
+    assert best and best.username == "fry"
+
+
+def test_edition_avoids_full_cast_when_standard_requested():
+    resp = [
+        _resp("standard", True, [_f(r"a\Harry Potter and the Chamber of Secrets - Stephen Fry.m4b", 380_000_000)]),
+        _resp("cast", True, [_f(r"b\Harry Potter and the Chamber of Secrets (Full Cast Edition).m4b", 400_000_000)]),
+    ]
+    best = m.pick_best(resp, "Harry Potter and the Chamber of Secrets", "J.K. Rowling", PREFS)
+    assert best and best.username == "standard"
+
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for fn in fns:

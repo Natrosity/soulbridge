@@ -28,7 +28,7 @@ from .. import __version__, db, settings
 from ..clients import notify, plextv
 from ..clients.abr import ABR
 from ..clients.abs import ABS, library_key
-from ..clients.audible import Audible
+from ..clients.audible import Audible, product_url
 from ..clients.plex import Plex
 from ..core import auth, worker
 
@@ -643,7 +643,9 @@ def _quota_message(user: dict[str, Any]) -> Optional[str]:
 # cached discovery aids
 _LIB_INDEX: dict[str, Any] = {}                 # {ts, asins, keys}
 _BROWSE: dict[str, dict[str, Any]] = {}         # sort -> {ts, items}
-HERO_ROWS = (("Bestsellers", "BestSellers"), ("New & upcoming", "-ReleaseDate"))
+# (row label, Audible sort, which releases to show: 'released' | 'upcoming')
+HERO_ROWS = (("Bestsellers", "BestSellers", "released"),
+             ("Releasing Soon", "-ReleaseDate", "upcoming"))
 
 
 def _library_index() -> tuple[set, set]:
@@ -662,10 +664,12 @@ def _library_index() -> tuple[set, set]:
 
 
 def _mark_results(results: list[dict[str, Any]]) -> None:
-    """Flag each discover listing with its prior-request status and whether the
-    book is already in the Audiobookshelf library (so we don't allow a duplicate)."""
+    """Flag each discover listing with its prior-request status, whether the book is
+    already in the Audiobookshelf library (so we don't allow a duplicate), whether
+    it's still upcoming, and its Audible page URL."""
     asins, keys = _library_index()
     today = time.strftime("%Y-%m-%d", time.gmtime())
+    region = settings.get("audible_region") or "us"
     for r in results:
         if "requested_status" not in r:
             ex = db.get_item_by_source("user", r["asin"]) if r.get("asin") else None
@@ -675,25 +679,33 @@ def _mark_results(results: list[dict[str, Any]]) -> None:
         r["in_library"] = bool((r.get("asin") and r["asin"] in asins) or (k and k in keys))
         rd = r.get("release_date") or ""
         r["upcoming"] = bool(rd and rd > today)
+        r["audible_url"] = product_url(r.get("asin") or "", region)
 
 
 def _hero_rows() -> list[dict[str, Any]]:
     """Curated Audible browse rows for the discovery page (cached 6h; status marks
-    are refreshed per request)."""
+    refreshed per request). Bestsellers shows only already-released titles;
+    'Releasing Soon' shows only not-yet-out titles."""
     region = settings.get("audible_region") or "us"
+    today = time.strftime("%Y-%m-%d", time.gmtime())
     rows: list[dict[str, Any]] = []
-    for label, sort in HERO_ROWS:
+    for label, sort, which in HERO_ROWS:
         c = _BROWSE.get(sort)
         if c and time.time() - c["ts"] < 6 * 3600:
             items = c["items"]
         else:
             aud = Audible(region)
-            items = aud.browse(sort, 18)
+            items = aud.browse(sort, 40)            # fetch wide, then filter by release
             aud.close()
             if items:
                 _BROWSE[sort] = {"ts": time.time(), "items": items}
             elif c:
                 items = c["items"]                  # keep last-good on a transient failure
+        if which == "upcoming":
+            items = [b for b in items if (b.get("release_date") or "") > today]
+        else:
+            items = [b for b in items if not b.get("release_date") or b["release_date"] <= today]
+        items = items[:18]
         if items:
             deco = [dict(it) for it in items]       # fresh status marks each render
             _mark_results(deco)
@@ -782,7 +794,8 @@ def request_candidates(request: Request, item_id: int):
     item = _owned_item(request, item_id)
     if not auth.is_trusted(request.state.user):
         raise HTTPException(403, "Interactive requests require a trusted account")
-    results = worker.manual_search(item["title"], item.get("author") or "")
+    edition = {"narrator": item.get("narrator"), "year": (item.get("release_date") or "")[:4]}
+    results = worker.manual_search(item["title"], item.get("author") or "", edition)
     token = uuid.uuid4().hex
     _SEARCH_CACHE[token] = {"ts": time.time(), "item": item_id, "results": results}
     for k in [k for k, v in _SEARCH_CACHE.items() if time.time() - v["ts"] > 1800]:
@@ -860,6 +873,9 @@ def library_page(request: Request, page: int = 0, q: str = "", sort: str = "adde
             skey, desc = LIBRARY_SORTS[sort]
             items, total = a.library_items(lib, limit=per, page=max(0, page), sort=skey, desc=desc)
         a.close()
+        region = settings.get("audible_region") or "us"
+        for it in items:
+            it["audible_url"] = product_url(it.get("asin") or "", region)
     pages = 1 if searching else ((total + per - 1) // per if per else 1)
     return templates.TemplateResponse(request, "library.html", _ctx(
         request, items=items, total=total, page=max(0, page), pages=pages, configured=configured,

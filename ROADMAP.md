@@ -133,6 +133,14 @@ and audited, because the app becomes internet-facing.
 - 2026-08-23: Phase 6 complete (v0.10.0) — Apprise notifications (request/complete/
   failure + test button; new `apprise` dep → image rebuild), ABR history import,
   cutover-ready. All six phases shipped; ABR retirement is now an operator choice.
+- 2026-08-23: Discovery/library polish + edition matching (v0.12.0) — hero rows reworked
+  (Bestsellers = released only, "Releasing Soon" = upcoming only; request/Pre-Save button
+  overlaid on the cover, revealed on hover / always on touch; cover + title link to the
+  Audible page; themed scrollbars). Library cards link to Audible. **Fixed a cover bug**
+  (an earlier edit had turned `ABS.item_cover` into dead code, so all library covers 404'd).
+  **Edition matching**: the ranker now favours the requested narrator + year and avoids
+  grabbing a dramatised/full-cast upload when a standard edition was requested (and vice
+  versa); on import it logs a warning on an obvious language or edition mismatch.
 - 2026-08-23: Post-launch enhancements (v0.11.0) — (1) **library dedup**: discovery
   now cross-checks the real ABS library (ASIN + title|author-surname key, cached 5 min)
   and flags already-owned books ("In your library", no request button); (2) **library
