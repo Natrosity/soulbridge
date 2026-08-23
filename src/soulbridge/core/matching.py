@@ -4,6 +4,7 @@ tokens, so shorter/cleaner queries beat 'title + full author'."""
 from __future__ import annotations
 
 import re
+import unicodedata
 from dataclasses import dataclass, field
 from typing import Any, Optional
 
@@ -12,8 +13,15 @@ SPAM = ("sample", "summary", "workbook", "analysis of", "study guide", "abridged
 STOP = {"the", "a", "an", "of", "and", "to", "in", "my", "is", "for"}
 
 
+# ligatures / special letters that NFKD does not decompose to ASCII
+_LIGATURES = str.maketrans({"æ": "ae", "œ": "oe", "ø": "o", "ð": "d", "þ": "th",
+                            "ß": "ss", "ł": "l", "đ": "d", "ĳ": "ij"})
+
+
 def norm(s: str) -> str:
-    s = (s or "").lower().replace("'", "").replace("’", "")
+    s = (s or "").lower().replace("'", "").replace("’", "").translate(_LIGATURES)
+    # fold accents to ASCII so "recursión" -> "recursion" (how Soulseek indexes it)
+    s = unicodedata.normalize("NFKD", s).encode("ascii", "ignore").decode("ascii")
     return re.sub(r"[^a-z0-9]+", " ", s).strip()
 
 

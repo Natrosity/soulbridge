@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import os
 import re
+import unicodedata
 from typing import Any, Optional
 
 from mutagen.flac import FLAC
@@ -31,7 +32,8 @@ ORDER = list(LABELS.keys())
 
 
 def _norm(s: str) -> str:
-    return re.sub(r"[^a-z0-9]+", " ", (s or "").lower()).strip()
+    s = unicodedata.normalize("NFKD", (s or "").lower()).encode("ascii", "ignore").decode("ascii")
+    return re.sub(r"[^a-z0-9]+", " ", s).strip()
 
 
 def decide(old: str, new: str) -> tuple[str, str]:

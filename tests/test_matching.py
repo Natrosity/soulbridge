@@ -24,6 +24,14 @@ def test_query_drops_short_contraction_tokens():
     assert qs[0] == "glad mom died"
 
 
+def test_accents_folded_to_ascii():
+    # accented letters must fold, not split the word ("recursión" -> "recursion")
+    assert m.norm("Recursión") == "recursion"
+    assert m.norm("Les Misérables") == "les miserables"
+    assert m.norm("Æther") == "aether"
+    assert m.build_queries("Recursión", "Blake Crouch")[0] == "recursion"
+
+
 def test_prefers_single_m4b_with_free_slot():
     resp = [
         _resp("a", True, [_f(r"x\I'm Glad My Mom Died - Jennette McCurdy.m4b", 391_000_000)]),
