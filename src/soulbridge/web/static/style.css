@@ -44,6 +44,11 @@ a:hover { text-decoration: underline; }
 .authcard .btn { margin-top: 6px; }
 .autherr { background: #2a1414; border: 1px solid #4b2020; color: var(--err);
   padding: 9px 12px; border-radius: 8px; font-size: 13px; margin: 6px 0; }
+.authdiv { display: flex; align-items: center; gap: 10px; margin: 16px 0 12px; color: var(--muted); font-size: 12px; }
+.authdiv::before, .authdiv::after { content: ""; flex: 1; height: 1px; background: var(--line); }
+.authcard a.btn.plex { display: block; width: 100%; text-align: center; margin-top: 0;
+  background: #e5a00d; border-color: #e5a00d; color: #1a1305; font-weight: 600; }
+.authcard a.btn.plex:hover { background: #f0b52a; border-color: #f0b52a; }
 
 /* user management */
 .usertable td { vertical-align: middle; }

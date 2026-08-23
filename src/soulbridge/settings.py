@@ -50,6 +50,10 @@ SPEC: list[Field] = [
           help="X-Plex-Token. Find it in any item's 'Get Info > View XML' URL."),
     Field("plex_library_section_id", "Plex library section id", "", "Plex",
           help="The audiobook library's section id (a number, e.g. 5)."),
+    Field("plex_login_enabled", "Enable 'Sign in with Plex'", "false", "Plex", "bool",
+          help="Let users sign in with their Plex account. Only accounts with access to "
+               "the Plex server above (URL + token) are admitted; new ones are auto-created "
+               "at the default role. Requires the Plex URL and token to be set."),
     # Jellyfin scan (optional)
     Field("jellyfin_url", "Jellyfin URL", "", "Jellyfin",
           help="Optional. e.g. http://jellyfin:8096. Triggers a library scan after import."),
@@ -86,6 +90,9 @@ SPEC: list[Field] = [
     Field("request_quota", "Request quota per user", "0", "Access", "number",
           help="Max open requests a non-admin may have. 0 = unlimited."),
     Field("instance_name", "Instance name", "Soulbridge", "General"),
+    Field("public_url", "Public URL", "", "General",
+          help="External base URL users reach this at, e.g. https://soulbridge.example.com. "
+               "Used to build the Plex sign-in redirect. Leave blank to infer from the request."),
 ]
 
 _BY_KEY = {f.key: f for f in SPEC}

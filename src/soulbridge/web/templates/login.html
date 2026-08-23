@@ -16,6 +16,10 @@
       </label>
       <button class="btn primary" type="submit">Sign in</button>
     </form>
+    {% if plex_login %}
+    <div class="authdiv"><span>or</span></div>
+    <a class="btn plex js-busy" href="/auth/plex/start" data-busy="Connecting to Plex…">Sign in with Plex</a>
+    {% endif %}
   </div>
 </div>
 {% endblock %}

@@ -290,6 +290,12 @@ def get_user_by_name(username: str) -> Optional[dict[str, Any]]:
         return dict(r) if r else None
 
 
+def get_user_by_plex_id(plex_id: str) -> Optional[dict[str, Any]]:
+    with connect() as c:
+        r = c.execute("SELECT * FROM users WHERE plex_id=?", (plex_id,)).fetchone()
+        return dict(r) if r else None
+
+
 def list_users() -> list[dict[str, Any]]:
     with connect() as c:
         return [dict(r) for r in c.execute("SELECT * FROM users ORDER BY id")]

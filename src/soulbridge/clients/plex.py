@@ -32,6 +32,21 @@ class Plex:
         except Exception:
             return False
 
+    def machine_identifier(self) -> str:
+        """The server's unique clientIdentifier — used to confirm a Plex-login user
+        actually has access to *this* server."""
+        if not self.configured:
+            return ""
+        try:
+            r = self._c.get(self.base + "/identity", params=self._params(),
+                            headers={"Accept": "application/json"})
+            if r.status_code >= 400:
+                return ""
+            mc = r.json().get("MediaContainer") or {}
+            return mc.get("machineIdentifier") or ""
+        except Exception:
+            return ""
+
     def scan(self, section_id: str, path: str | None = None) -> bool:
         """Refresh a section, optionally scoped to a single folder path."""
         if not (self.configured and section_id):

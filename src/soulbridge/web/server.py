@@ -24,14 +24,17 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.middleware.sessions import SessionMiddleware
 
 from .. import __version__, db, settings
+from ..clients import plextv
 from ..clients.abs import ABS
 from ..clients.audible import Audible
+from ..clients.plex import Plex
 from ..core import auth, worker
 
 HERE = Path(__file__).parent
 templates = Jinja2Templates(directory=str(HERE / "templates"))
 
 _SEARCH_CACHE: dict[str, dict[str, Any]] = {}
+_PLEX_PENDING: dict[str, dict[str, Any]] = {}   # oauth state -> {pin_id, ts}
 
 CSP = ("default-src 'self'; script-src 'self'; style-src 'self'; "
        "img-src 'self' data: https:; font-src 'self'; object-src 'none'; "
@@ -39,7 +42,7 @@ CSP = ("default-src 'self'; script-src 'self'; style-src 'self'; "
 
 # public (no auth); prefixes matched with startswith
 PUBLIC_EXACT = {"/login", "/setup", "/health", "/favicon.ico"}
-PUBLIC_PREFIX = ("/static/",)
+PUBLIC_PREFIX = ("/static/", "/auth/plex")
 # admin-only; everything else that is authed is available to any logged-in user
 ADMIN_EXACT = {"/"}
 ADMIN_PREFIX = ("/settings", "/users", "/search", "/grab", "/items", "/partials", "/tags", "/api")
@@ -166,26 +169,35 @@ def setup_submit(request: Request, username: str = Form(...), password: str = Fo
     return RedirectResponse("/", status_code=303)
 
 
+_PLEX_LOGIN_ERRORS = {
+    "plex": "Plex sign-in failed. Please try again.",
+    "plex_denied": "That Plex account doesn't have access to this server.",
+}
+
+
 @app.get("/login", response_class=HTMLResponse)
-def login_page(request: Request):
+def login_page(request: Request, error: str = ""):
     if db.user_count() == 0:
         return RedirectResponse("/setup", status_code=303)
     if auth.current_user(request):
         return RedirectResponse("/", status_code=303)
     auth.csrf_token(request)                       # ensure token exists for the form
-    return templates.TemplateResponse(request, "login.html", _ctx(request, error=None))
+    return templates.TemplateResponse(request, "login.html", _ctx(
+        request, error=_PLEX_LOGIN_ERRORS.get(error), plex_login=_plex_enabled()))
 
 
 @app.post("/login", dependencies=[Depends(csrf_protect)])
 def login_submit(request: Request, username: str = Form(...), password: str = Form(...)):
     user = db.get_user_by_name(username.strip())
     fail = templates.TemplateResponse(
-        request, "login.html", _ctx(request, error="Invalid username or password."))
+        request, "login.html", _ctx(request, error="Invalid username or password.",
+                                    plex_login=_plex_enabled()))
     if not user:
         return fail
     if auth.is_locked(user):
         return templates.TemplateResponse(request, "login.html", _ctx(
-            request, error="Account temporarily locked. Try again later."))
+            request, error="Account temporarily locked. Try again later.",
+            plex_login=_plex_enabled()))
     if not auth.verify_pw(user.get("password_hash"), password):
         auth.register_failure(user)
         return fail
@@ -198,6 +210,110 @@ def login_submit(request: Request, username: str = Form(...), password: str = Fo
 def logout(request: Request):
     auth.logout_session(request)
     return RedirectResponse("/login", status_code=303)
+
+
+# --------------------------------------------------------------- Sign in with Plex
+def _plex_enabled() -> bool:
+    return bool(settings.get_bool("plex_login_enabled")
+                and settings.get("plex_url") and settings.get("plex_token"))
+
+
+def _plex_client_id() -> str:
+    """A stable client identifier for this install (Plex ties the PIN to it)."""
+    cid = db.get_setting("plex_client_id")
+    if not cid:
+        cid = uuid.uuid4().hex
+        db.set_setting("plex_client_id", cid)
+    return cid
+
+
+def _public_base(request: Request) -> str:
+    return (settings.get("public_url") or str(request.base_url)).rstrip("/")
+
+
+def _unique_username(base: str) -> str:
+    name = (base or "").strip() or "plexuser"
+    if not db.get_user_by_name(name):
+        return name
+    i = 2
+    while db.get_user_by_name(f"{name}{i}"):
+        i += 1
+    return f"{name}{i}"
+
+
+def _plex_provision(acct: dict[str, Any]) -> dict[str, Any]:
+    """Find the Soulbridge user for a verified Plex account (match by plex_id only —
+    never by name, so a matching username can't hijack an internal account), creating
+    one at the default role on first sign-in."""
+    existing = db.get_user_by_plex_id(acct["id"])
+    if existing:
+        return existing
+    role = settings.get("default_role")
+    role = role if role in ("standard", "trusted") else "standard"
+    uname = _unique_username(acct.get("username") or f"plex-{acct['id']}")
+    uid = db.create_user(uname, None, role=role, email=acct.get("email"), plex_id=acct["id"])
+    db.log_event(f"Provisioned Plex user '{uname}' (role {role})")
+    return db.get_user(uid)
+
+
+@app.get("/auth/plex/start")
+def plex_start(request: Request):
+    if not _plex_enabled():
+        return RedirectResponse("/login", status_code=303)
+    cid = _plex_client_id()
+    ptv = plextv.PlexTV(cid, version=__version__)
+    try:
+        pin = ptv.create_pin()
+    except Exception as e:
+        db.log_event(f"Plex sign-in: PIN creation failed: {e}", "warn")
+        return RedirectResponse("/login?error=plex", status_code=303)
+    finally:
+        ptv.close()
+    state = uuid.uuid4().hex
+    _PLEX_PENDING[state] = {"pin_id": pin["id"], "ts": time.time()}
+    for k in [k for k, v in _PLEX_PENDING.items() if time.time() - v["ts"] > 900]:
+        _PLEX_PENDING.pop(k, None)
+    request.session["plex_state"] = state          # bind the flow to this browser
+    forward = f"{_public_base(request)}/auth/plex/callback?state={state}"
+    return RedirectResponse(plextv.auth_url(cid, pin["code"], forward), status_code=303)
+
+
+@app.get("/auth/plex/callback")
+def plex_callback(request: Request, state: str = ""):
+    if not _plex_enabled():
+        return RedirectResponse("/login", status_code=303)
+    pending = _PLEX_PENDING.pop(state, None)
+    sess_state = request.session.pop("plex_state", None)
+    if not state or not pending or state != sess_state:
+        return RedirectResponse("/login?error=plex", status_code=303)
+    cid = _plex_client_id()
+    ptv = plextv.PlexTV(cid, version=__version__)
+    try:
+        token = None
+        for _ in range(6):                          # PIN is usually authorised by now
+            token = ptv.check_pin(pending["pin_id"])
+            if token:
+                break
+            time.sleep(1)
+        if not token:
+            return RedirectResponse("/login?error=plex", status_code=303)
+        acct = ptv.account(token)
+        if not acct or not acct.get("id"):
+            return RedirectResponse("/login?error=plex", status_code=303)
+        # Gate: the account must be able to reach the configured Plex server.
+        p = Plex(settings.get("plex_url"), settings.get("plex_token"))
+        machine = p.machine_identifier()
+        p.close()
+        if not machine or not plextv.server_in_resources(ptv.resources(token), machine):
+            db.log_event(f"Plex sign-in denied for '{acct.get('username')}' "
+                         "(no access to the server)", "warn")
+            return RedirectResponse("/login?error=plex_denied", status_code=303)
+    finally:
+        ptv.close()
+    user = _plex_provision(acct)
+    auth.login_session(request, user)
+    db.log_event(f"{user['username']} signed in with Plex")
+    return RedirectResponse("/", status_code=303)
 
 
 @app.get("/account", response_class=HTMLResponse)

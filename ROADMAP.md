@@ -78,12 +78,17 @@ and audited, because the app becomes internet-facing.
   is an upsert and never trips the quota.
 - Audit log of request/approve/deny/download actions (the events log).
 
-## Phase 5 — Sign in with Plex
+## Phase 5 — Sign in with Plex  *(done — v0.9.0)*
 
-- Plex PIN OAuth (`plex.tv/api/v2/pins` → authorise → poll → account).
-- Verify membership of the configured Plex server (only your users get in);
-  auto-provision Soulbridge users (default role from global setting).
-- Internal accounts remain for admin / non-Plex users.
+- Plex PIN OAuth (`plex.tv/api/v2/pins` → authorise at app.plex.tv → poll → account),
+  in `clients/plextv.py`; a stable per-install client id is stored in settings.
+- Verify membership of the configured Plex server (via the account's `resources`
+  matching the server's `machineIdentifier`); only accounts that can reach the server
+  are admitted. Auto-provision users at the global `default_role`, matched by `plex_id`
+  only (a matching username can't hijack an internal account — it gets uniquified).
+- Internal accounts remain for admin / non-Plex users (Plex users have no password).
+- Enabled by `plex_login_enabled` (needs Plex URL + token). `public_url` sets the
+  external base for the OAuth redirect (falls back to the request host).
 
 ## Phase 6 — Parity polish & cutover
 
@@ -115,6 +120,11 @@ and audited, because the app becomes internet-facing.
   (approve→pending / deny→denied) with a nav count badge; per-user open-request quota
   enforced at request time for non-admins with a friendly banner; audit events for
   approve/deny. `db.count_open_requests` + `OPEN_STATUSES`; `denied` status.
-- **NEXT: Phase 5** (Sign in with Plex, Overseerr-style) — Plex PIN OAuth, verify
-  membership of the configured Plex server, auto-provision users at the global
-  `default_role`; internal accounts remain for admin / non-Plex users.
+- 2026-08-23: Phase 5 complete (v0.9.0) — Sign in with Plex (PIN OAuth in
+  `clients/plextv.py`, membership gate via server machineIdentifier, provision by
+  plex_id at default_role, login button behind `plex_login_enabled`, `public_url`
+  for the redirect). Verified live (PIN round-trip + provisioning); real OAuth
+  round-trip needs a human, so give it a real sign-in before cutover.
+- **NEXT: Phase 6** (parity polish & cutover) — Apprise notifications on
+  request/approval/completion, requester-visible status, optional ABR history
+  import, then retire ABR.
