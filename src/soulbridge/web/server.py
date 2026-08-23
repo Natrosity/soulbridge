@@ -521,7 +521,7 @@ def item_approve(request: Request, item_id: int):
     # standard-user requests are stored mode=auto, so approval queues an auto-grab —
     # unless the book isn't out yet, in which case hold it until its release date.
     rd = (item.get("release_date") or "").strip()
-    scheduled = bool(rd and rd > time.strftime("%Y-%m-%d", time.gmtime()))
+    scheduled = bool(rd and rd > db.today())
     db.update_item(item_id, status="scheduled" if scheduled else "pending",
                    attempts=0, error=None)
     if not scheduled:
@@ -668,7 +668,7 @@ def _mark_results(results: list[dict[str, Any]]) -> None:
     already in the Audiobookshelf library (so we don't allow a duplicate), whether
     it's still upcoming, and its Audible page URL."""
     asins, keys = _library_index()
-    today = time.strftime("%Y-%m-%d", time.gmtime())
+    today = db.today()
     region = settings.get("audible_region") or "us"
     for r in results:
         if "requested_status" not in r:
@@ -687,7 +687,7 @@ def _hero_rows() -> list[dict[str, Any]]:
     refreshed per request). Bestsellers shows only already-released titles;
     'Releasing Soon' shows only not-yet-out titles."""
     region = settings.get("audible_region") or "us"
-    today = time.strftime("%Y-%m-%d", time.gmtime())
+    today = db.today()
     rows: list[dict[str, Any]] = []
     for label, sort, which in HERO_ROWS:
         c = _BROWSE.get(sort)
@@ -743,7 +743,7 @@ def do_request(request: Request, asin: str = Form(...), title: str = Form(...),
     if not db.get_item_by_source("user", asin) and _quota_message(user):
         return RedirectResponse("/discover?err=quota", status_code=303)
     release_date = (release_date or "").strip()[:10] or None
-    upcoming = bool(release_date and release_date > time.strftime("%Y-%m-%d", time.gmtime()))
+    upcoming = bool(release_date and release_date > db.today())
     # Interactive picking is only meaningful for users who can auto-download; a
     # standard user's request is held for approval regardless of the mode chosen.
     interactive = mode == "interactive" and auth.is_trusted(user)

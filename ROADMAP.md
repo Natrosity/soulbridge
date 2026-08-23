@@ -133,6 +133,12 @@ and audited, because the app becomes internet-facing.
 - 2026-08-23: Phase 6 complete (v0.10.0) — Apprise notifications (request/complete/
   failure + test button; new `apprise` dep → image rebuild), ABR history import,
   cutover-ready. All six phases shipped; ABR retirement is now an operator choice.
+- 2026-08-23: Timezone support + region-correct Audible links (v0.12.1) — all timestamps
+  now respect the `TZ` env var (via `zoneinfo`; `db.now()`/`db.today()` replace the old UTC
+  `gmtime` calls) instead of hardcoded UTC. Audible product URLs already followed the
+  configured `audible_region`, so region-specific ASINs (e.g. an AU-only book) now link to
+  the matching domain — set this instance's region to `au`. Added `tzdata` dep for slim-image
+  robustness (the running container already has system tzdata).
 - 2026-08-23: Discovery/library polish + edition matching (v0.12.0) — hero rows reworked
   (Bestsellers = released only, "Releasing Soon" = upcoming only; request/Pre-Save button
   overlaid on the cover, revealed on hover / always on touch; cover + title link to the

@@ -6,7 +6,13 @@ import os
 import sqlite3
 import time
 from contextlib import contextmanager
+from datetime import datetime, timezone
 from typing import Any, Iterable, Iterator, Optional
+
+try:
+    from zoneinfo import ZoneInfo
+except Exception:                                    # pragma: no cover
+    ZoneInfo = None                                  # type: ignore
 
 CONFIG_DIR = os.environ.get("SOULBRIDGE_CONFIG_DIR", "/config")
 DB_PATH = os.environ.get("SOULBRIDGE_DB", os.path.join(CONFIG_DIR, "soulbridge.db"))
@@ -74,8 +80,30 @@ CREATE INDEX IF NOT EXISTS idx_tagwrites_ts ON tag_writes(id);
 """
 
 
+def _tzinfo():
+    """The configured display timezone from the TZ env var (e.g. Australia/Brisbane),
+    falling back to UTC. Set TZ on the container to localise all timestamps."""
+    name = (os.environ.get("TZ") or "").strip()
+    if name and ZoneInfo is not None:
+        try:
+            return ZoneInfo(name)
+        except Exception:
+            pass
+    return timezone.utc
+
+
+def now() -> str:
+    """Current wall-clock timestamp in the configured timezone (no offset suffix)."""
+    return datetime.now(_tzinfo()).strftime("%Y-%m-%dT%H:%M:%S")
+
+
+def today() -> str:
+    """Today's date in the configured timezone (for release-date comparisons)."""
+    return datetime.now(_tzinfo()).strftime("%Y-%m-%d")
+
+
 def _now() -> str:
-    return time.strftime("%Y-%m-%dT%H:%M:%S", time.gmtime())
+    return now()
 
 
 def init() -> None:

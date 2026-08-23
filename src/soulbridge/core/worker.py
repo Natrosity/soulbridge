@@ -8,7 +8,6 @@ import os
 import re
 import shutil
 import threading
-import time
 from typing import Any, Optional
 
 from .. import db, settings
@@ -404,7 +403,7 @@ def _discover_requests() -> None:
 def _release_due() -> None:
     """Promote 'scheduled' (not-yet-released) requests to 'pending' once their
     release date has arrived, so they only get searched for after publication."""
-    today = time.strftime("%Y-%m-%d", time.gmtime())
+    today = db.today()
     for item in db.list_items(statuses=["scheduled"]):
         rd = (item.get("release_date") or "").strip()
         if not rd or rd <= today:
@@ -462,7 +461,7 @@ def tick() -> None:
             except Exception as e:
                 db.log_event(f"progress check failed: {e}", "error", item["id"])
     sk.close()
-    STATUS["last_poll"] = time.strftime("%Y-%m-%dT%H:%M:%S", time.gmtime())
+    STATUS["last_poll"] = db.now()
 
 
 def _run() -> None:
