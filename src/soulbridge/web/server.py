@@ -11,6 +11,7 @@ Security model (Phase 1):
 from __future__ import annotations
 
 import json
+import os
 import time
 import uuid
 from pathlib import Path
@@ -92,8 +93,14 @@ class Guard(BaseHTTPMiddleware):
 app = FastAPI(title="Soulbridge", version=__version__)
 app.mount("/static", StaticFiles(directory=str(HERE / "static")), name="static")
 app.add_middleware(Guard)
+# Mark the session cookie Secure when serving strictly over HTTPS. Off by default
+# because the container also publishes plain-http :8793 for direct LAN access (a
+# Secure cookie wouldn't be sent there); set SOULBRIDGE_SECURE_COOKIES=true once
+# all access is via the HTTPS reverse proxy.
+_SECURE_COOKIES = os.environ.get("SOULBRIDGE_SECURE_COOKIES", "").strip().lower() in (
+    "1", "true", "yes", "on")
 app.add_middleware(SessionMiddleware, secret_key=auth.get_secret(), same_site="lax",
-                   https_only=False, max_age=14 * 24 * 3600)
+                   https_only=_SECURE_COOKIES, max_age=14 * 24 * 3600)
 
 
 @app.on_event("startup")
@@ -194,6 +201,7 @@ def login_submit(request: Request, username: str = Form(...), password: str = Fo
         request, "login.html", _ctx(request, error="Invalid username or password.",
                                     plex_login=_plex_enabled()))
     if not user:
+        auth.waste_time(password)          # equalise timing so usernames can't be enumerated
         return fail
     if auth.is_locked(user):
         return templates.TemplateResponse(request, "login.html", _ctx(

@@ -44,8 +44,22 @@ def get_secret() -> str:
 
 
 # ---- passwords ----
+# A fixed hash to verify against when a login names a non-existent user, so the
+# response takes the same time as a real (wrong-password) attempt — no timing oracle
+# for username enumeration.
+_DUMMY_HASH = _ph.hash("soulbridge-nonexistent-account")
+
+
 def hash_pw(password: str) -> str:
     return _ph.hash(password)
+
+
+def waste_time(password: str) -> None:
+    """Spend the same effort as a real verify (for unknown-username logins)."""
+    try:
+        _ph.verify(_DUMMY_HASH, password or "")
+    except Exception:
+        pass
 
 
 def verify_pw(password_hash: Optional[str], password: str) -> bool:

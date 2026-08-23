@@ -133,4 +133,9 @@ and audited, because the app becomes internet-facing.
 - 2026-08-23: Phase 6 complete (v0.10.0) — Apprise notifications (request/complete/
   failure + test button; new `apprise` dep → image rebuild), ABR history import,
   cutover-ready. All six phases shipped; ABR retirement is now an operator choice.
-- **NEXT: final audit** — functionality, polish, and security pass across the whole app.
+- 2026-08-23: Final audit (v0.10.1) — all six phases done, then a functionality/polish/
+  security pass. Verified live: every POST is CSRF-protected; admin surfaces reject
+  standard users (GET + POST); unauthenticated is bounced; request ownership is enforced
+  (candidates/pick/auto); no XSS (`|safe`-free, autoescape on); no secrets in logs; strict
+  CSP. Hardening added: opt-in Secure session cookies (`SOULBRIDGE_SECURE_COOKIES`) and
+  constant-time login for unknown usernames. No HIGH/MEDIUM findings.
