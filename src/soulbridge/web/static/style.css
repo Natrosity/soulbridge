@@ -174,7 +174,10 @@ tr.rejected { opacity: 0.5; }
 .tagfield { display: grid; grid-template-columns: 110px 1fr auto; gap: 10px; align-items: baseline; padding: 4px 0; border-bottom: 1px solid #1b1f26; font-size: 13px; }
 .tagfield:last-child { border-bottom: none; }
 .fname { color: var(--muted); font-weight: 500; }
-.fvals { min-width: 0; overflow: hidden; }
+/* clamp long tag values (a description can be a whole paragraph) — generous on
+   desktop, tighter on mobile (see the max-width:640px block) */
+.fvals { min-width: 0; overflow: hidden;
+  display: -webkit-box; -webkit-line-clamp: 6; -webkit-box-orient: vertical; }
 .fold { color: var(--muted); }
 .farrow { color: var(--muted); margin: 0 6px; }
 .fnew { color: var(--text); }
@@ -294,6 +297,32 @@ body { padding-bottom: 46px; }
 
 @media (max-width: 640px) {
   .field { grid-template-columns: 1fr; }
-  .topbar { flex-wrap: wrap; gap: 12px; }
   .statusstrip { margin-left: 0; }
+
+  /* top bar: let the nav and user menu wrap instead of overflowing the width */
+  .topbar { flex-wrap: wrap; gap: 10px 14px; padding: 10px 14px; }
+  .topbar nav { flex-wrap: wrap; gap: 8px 14px; width: 100%; order: 3; }
+  .topbar nav a { font-size: 14px; }
+  .usermenu { flex-wrap: wrap; gap: 8px 12px; }
+
+  /* wide data tables scroll inside themselves rather than the whole page sideways */
+  table.results { display: block; overflow-x: auto; white-space: nowrap; -webkit-overflow-scrolling: touch; }
+  table.results td.match { max-width: 200px; }
+
+  /* request / candidate rows: keep the cover beside the text, drop the actions
+     onto their own full-width line with larger, easier-to-tap buttons */
+  .drow { flex-wrap: wrap; }
+  .daction { width: 100%; margin-top: 10px; }
+  .daction .reqform { justify-content: stretch; gap: 8px; }
+  .daction .reqform .btn { flex: 1; text-align: center; padding: 9px 12px; }
+
+  /* tags: stack the field grid and clamp long values (descriptions get huge) */
+  .tagbody { gap: 12px; padding: 12px; }
+  .tagcover { width: 60px; height: 60px; }
+  .tagfield { grid-template-columns: 1fr auto; column-gap: 8px; }
+  .fname { grid-column: 1 / -1; }
+  .fvals { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+
+  /* footer: keep just the status pills, drop the byline + timestamp so it fits */
+  .foot-brand, #sb-poll { display: none; }
 }

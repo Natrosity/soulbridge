@@ -13,22 +13,23 @@
         <td>
           <form method="post" action="/users/{{ u.id }}/role" class="inline">
             <input type="hidden" name="csrf" value="{{ csrf }}">
-            <select name="role" onchange="this.form.submit()">
+            <select name="role" data-autosubmit>
               {% for r in roles %}<option value="{{ r }}" {{ 'selected' if u.role == r }}>{{ r }}</option>{% endfor %}
             </select>
+            <button class="btn sm" type="submit">Save</button>
           </form>
         </td>
         <td class="muted">{{ (u.last_login or '—').replace('T',' ') }}</td>
         <td class="urow-actions">
-          <form method="post" action="/users/{{ u.id }}/password" class="inline"
-                onsubmit="return this.password.value.length>=10 || (alert('Password must be at least 10 characters'),false)">
+          <form method="post" action="/users/{{ u.id }}/password" class="inline">
             <input type="hidden" name="csrf" value="{{ csrf }}">
-            <input type="password" name="password" placeholder="reset password" autocomplete="new-password">
+            <input type="password" name="password" placeholder="reset password"
+                   minlength="10" required autocomplete="new-password">
             <button class="btn sm" type="submit">Set</button>
           </form>
           {% if not (u.role == 'admin') or users|selectattr('role','equalto','admin')|list|length > 1 %}
           <form method="post" action="/users/{{ u.id }}/delete" class="inline"
-                onsubmit="return confirm('Delete {{ u.username }}?')">
+                data-confirm="Delete {{ u.username }}?">
             <input type="hidden" name="csrf" value="{{ csrf }}">
             <button class="btn ghost sm" type="submit">Delete</button>
           </form>

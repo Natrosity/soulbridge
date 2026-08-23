@@ -1,6 +1,6 @@
 [project]
 name = "soulbridge"
-version = "0.9.0"
+version = "0.9.2"
 description = "Request audiobooks and fulfil them from Soulseek. The audiobook bridge between AudioBookRequest / the *arr stack and slskd."
 readme = "README.md"
 requires-python = ">=3.11"

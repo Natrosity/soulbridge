@@ -10,11 +10,17 @@
 </section>
 
 <section class="panel">
-  <h2>Change password</h2>
+  <h2>{{ 'Set a password' if not has_password else 'Change password' }}</h2>
+  {% if not has_password %}
+  <p class="hint" style="margin-bottom:14px">This account signs in with Plex. Set a password to
+    also enable signing in with your username and password.</p>
+  {% endif %}
   <form method="post" action="/account" class="settingsform" autocomplete="off">
     <input type="hidden" name="csrf" value="{{ csrf }}">
+    {% if has_password %}
     <div class="field"><label for="current">Current password</label>
       <div class="control"><input type="password" id="current" name="current" autocomplete="current-password"></div></div>
+    {% endif %}
     <div class="field"><label for="password">New password</label>
       <div class="control"><input type="password" id="password" name="password" autocomplete="new-password">
         <small>At least 10 characters.</small></div></div>

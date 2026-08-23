@@ -318,21 +318,29 @@ def plex_callback(request: Request, state: str = ""):
 
 @app.get("/account", response_class=HTMLResponse)
 def account_page(request: Request, saved: int = 0):
-    return templates.TemplateResponse(request, "account.html",
-                                      _ctx(request, saved=bool(saved), error=None))
+    user = request.state.user
+    return templates.TemplateResponse(request, "account.html", _ctx(
+        request, saved=bool(saved), error=None, has_password=bool(user.get("password_hash"))))
 
 
 @app.post("/account", dependencies=[Depends(csrf_protect)])
 def account_submit(request: Request, current: str = Form(""), password: str = Form(""),
                    confirm: str = Form("")):
     user = request.state.user
+    has_pw = bool(user.get("password_hash"))
+
+    def _err(msg: str):
+        return templates.TemplateResponse(request, "account.html",
+                                          _ctx(request, error=msg, has_password=has_pw))
+
     if password:
-        if not auth.verify_pw(user.get("password_hash"), current):
-            return templates.TemplateResponse(request, "account.html",
-                                              _ctx(request, error="Current password is incorrect."))
+        # A Plex-provisioned account has no password yet, so there's nothing to verify —
+        # let them set an initial one. Accounts that already have a password must confirm it.
+        if has_pw and not auth.verify_pw(user.get("password_hash"), current):
+            return _err("Current password is incorrect.")
         err = _password_problem(user["username"], password, confirm, check_user=False)
         if err:
-            return templates.TemplateResponse(request, "account.html", _ctx(request, error=err))
+            return _err(err)
         db.update_user(user["id"], password_hash=auth.hash_pw(password))
     return RedirectResponse("/account?saved=1", status_code=303)
 

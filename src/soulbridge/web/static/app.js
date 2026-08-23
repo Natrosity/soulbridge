@@ -48,8 +48,12 @@
     el.innerHTML = '<span class="spin" aria-hidden="true"></span>' + (label || "Working");
   }
   document.addEventListener("submit", function (e) {
+    var form = e.target;
+    // CSP forbids inline JS, so confirm()/onsubmit checks live here, not on the element.
+    var confirmMsg = form && form.getAttribute ? form.getAttribute("data-confirm") : null;
+    if (confirmMsg && !window.confirm(confirmMsg)) { e.preventDefault(); return; }
     var btn = e.submitter;
-    if (!btn && document.activeElement && document.activeElement.form === e.target) {
+    if (!btn && document.activeElement && document.activeElement.form === form) {
       btn = document.activeElement;              // fallback for browsers without e.submitter
     }
     if (btn && btn.tagName === "BUTTON" && (btn.type === "submit" || !btn.type) &&
@@ -62,6 +66,14 @@
   document.addEventListener("click", function (e) {
     var a = e.target.closest ? e.target.closest("a.js-busy") : null;
     if (a) busify(a, a.getAttribute("data-busy"));  // navigation proceeds normally
+  });
+  // auto-submit a <select data-autosubmit> on change (replaces the CSP-blocked onchange)
+  document.addEventListener("change", function (e) {
+    var el = e.target;
+    if (el && el.matches && el.matches("select[data-autosubmit]") && el.form) {
+      if (typeof el.form.requestSubmit === "function") el.form.requestSubmit();
+      else el.form.submit();
+    }
   });
 
   // --- server settings: dirty-glow save button + side-nav scrollspy ---
