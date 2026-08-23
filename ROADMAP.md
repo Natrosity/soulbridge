@@ -97,4 +97,7 @@ and audited, because the app becomes internet-facing.
   glow-on-change save) and status indicators moved to a bottom toolbar (v0.5.1).
 - 2026-08-22: Phase 2 complete (v0.6.0) — Audible discovery search, request flow
   (role-aware: trusted auto, standard awaiting-approval), My Requests page.
-  Next: Phase 3 (auto vs interactive requests with candidate scores).
+- 2026-08-22: accent-folding fix (v0.6.1) — "recursión" → "recursion" in search
+  queries (NFKD + ligature map).
+- **NEXT: Phase 3** (auto vs interactive requests with candidate scores) — see below.
+  Continuing in a fresh chat; this file + the `soulbridge` memory are the entry points.
