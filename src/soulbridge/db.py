@@ -184,6 +184,22 @@ def list_items_by_user(username: str, limit: int = 200) -> list[dict[str, Any]]:
         return [dict(r) for r in rows]
 
 
+# Requests that still count against a user's quota (everything not terminal).
+OPEN_STATUSES = ("awaiting_approval", "selecting", "pending", "searching",
+                 "downloading", "importing")
+
+
+def count_open_requests(username: str) -> int:
+    """How many not-yet-resolved requests a user currently has (for quota checks)."""
+    marks = ",".join("?" for _ in OPEN_STATUSES)
+    with connect() as c:
+        row = c.execute(
+            f"SELECT COUNT(*) n FROM items WHERE requested_by=? AND status IN ({marks})",
+            (username, *OPEN_STATUSES),
+        ).fetchone()
+        return row["n"]
+
+
 def get_item_by_source(source: str, source_id: str) -> Optional[dict[str, Any]]:
     with connect() as c:
         r = c.execute("SELECT * FROM items WHERE source=? AND source_id=?",

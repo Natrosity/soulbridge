@@ -103,13 +103,14 @@ def _startup() -> None:
 STATUS_BADGES = {
     "awaiting_approval": "wait", "selecting": "wait", "pending": "wait", "searching": "wait",
     "downloading": "busy", "importing": "busy",
-    "done": "ok", "no_results": "warn", "failed": "err", "skipped": "muted",
+    "done": "ok", "no_results": "warn", "failed": "err", "skipped": "muted", "denied": "muted",
 }
 STATUS_LABELS = {
     "awaiting_approval": "awaiting approval", "selecting": "choosing a source",
     "pending": "queued", "searching": "searching",
     "downloading": "downloading", "importing": "importing", "done": "in your library",
     "no_results": "not found on Soulseek", "failed": "failed", "skipped": "skipped",
+    "denied": "declined",
 }
 
 
@@ -136,6 +137,8 @@ def _ctx(request: Request, **extra: Any) -> dict[str, Any]:
                                   and settings.get("abs_library_id")),
         "user": user, "is_admin": auth.is_admin(user),
         "csrf": auth.csrf_token(request),
+        "pending_approvals": (db.counts_by_status().get("awaiting_approval", 0)
+                              if auth.is_admin(user) else 0),
     }
     ctx.update(extra)
     return ctx
@@ -372,16 +375,70 @@ def item_skip(item_id: int):
     return RedirectResponse("/", status_code=303)
 
 
+@app.post("/items/{item_id}/approve", dependencies=[Depends(csrf_protect)])
+def item_approve(request: Request, item_id: int):
+    admin = _require_admin(request)
+    item = db.get_item(item_id)
+    if not item:
+        raise HTTPException(404)
+    if item["status"] != "awaiting_approval":
+        return RedirectResponse("/requests/all", status_code=303)   # already handled
+    # standard-user requests are stored mode=auto, so approval queues an auto-grab
+    db.update_item(item_id, status="pending", attempts=0, error=None)
+    worker.wake()
+    db.log_event(f"{admin['username']} approved '{item['title']}'"
+                 f" (requested by {item.get('requested_by') or 'unknown'})", item_id=item_id)
+    return RedirectResponse("/requests/all", status_code=303)
+
+
+@app.post("/items/{item_id}/deny", dependencies=[Depends(csrf_protect)])
+def item_deny(request: Request, item_id: int):
+    admin = _require_admin(request)
+    item = db.get_item(item_id)
+    if not item:
+        raise HTTPException(404)
+    if item["status"] != "awaiting_approval":
+        return RedirectResponse("/requests/all", status_code=303)
+    db.update_item(item_id, status="denied", error=None)
+    db.log_event(f"{admin['username']} declined '{item['title']}'"
+                 f" (requested by {item.get('requested_by') or 'unknown'})", "warn", item_id)
+    return RedirectResponse("/requests/all", status_code=303)
+
+
+@app.get("/requests/all", response_class=HTMLResponse)
+def all_requests(request: Request):
+    _require_admin(request)
+    awaiting = db.list_items(statuses=["awaiting_approval"])
+    others = [it for it in db.list_items(limit=300) if it["status"] != "awaiting_approval"]
+    return templates.TemplateResponse(request, "all_requests.html", _ctx(
+        request, awaiting=awaiting, items=others))
+
+
 def _default_mode() -> str:
     m = settings.get("default_request_mode")
     return m if m in ("auto", "interactive") else "auto"
 
 
+def _quota_message(user: dict[str, Any]) -> Optional[str]:
+    """Return a human message if this user is at their open-request quota, else None.
+    Admins are exempt; quota 0 means unlimited."""
+    if auth.is_admin(user):
+        return None
+    quota = settings.get_int("request_quota", 0)
+    if quota <= 0:
+        return None
+    if db.count_open_requests(user["username"]) >= quota:
+        return (f"You've reached your limit of {quota} open request"
+                f"{'s' if quota != 1 else ''}. Wait for one to finish, then try again.")
+    return None
+
+
 @app.get("/discover", response_class=HTMLResponse)
-def discover_page(request: Request, q: str = ""):
+def discover_page(request: Request, q: str = "", err: str = ""):
     return templates.TemplateResponse(request, "discover.html", _ctx(
         request, q=q, results=None, default_mode=_default_mode(),
-        can_interactive=auth.is_trusted(request.state.user)))
+        can_interactive=auth.is_trusted(request.state.user),
+        error=(_quota_message(request.state.user) if err == "quota" else None)))
 
 
 @app.post("/discover", response_class=HTMLResponse, dependencies=[Depends(csrf_protect)])
@@ -394,7 +451,8 @@ def discover_search(request: Request, q: str = Form(...)):
         r["requested_status"] = ex["status"] if ex else None
     return templates.TemplateResponse(request, "discover.html", _ctx(
         request, q=q, results=results, default_mode=_default_mode(),
-        can_interactive=auth.is_trusted(request.state.user)))
+        can_interactive=auth.is_trusted(request.state.user),
+        error=_quota_message(request.state.user)))
 
 
 @app.post("/request", dependencies=[Depends(csrf_protect)])
@@ -402,6 +460,10 @@ def do_request(request: Request, asin: str = Form(...), title: str = Form(...),
                author: str = Form(""), narrator: str = Form(""), cover: str = Form(""),
                year: str = Form(""), mode: str = Form("auto")):
     user = request.state.user
+    # Enforce the per-user open-request quota (admins exempt; 0 = unlimited). A book
+    # already requested is an upsert (no new row), so it never trips the quota.
+    if not db.get_item_by_source("user", asin) and _quota_message(user):
+        return RedirectResponse("/discover?err=quota", status_code=303)
     # Interactive picking is only meaningful for users who can auto-download; a
     # standard user's request is held for approval regardless of the mode chosen.
     interactive = mode == "interactive" and auth.is_trusted(user)

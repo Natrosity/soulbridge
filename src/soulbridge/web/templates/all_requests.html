@@ -1,0 +1,58 @@
+{% extends "base.html" %}
+{% block title %}All Requests · {{ instance }}{% endblock %}
+{% block content %}
+
+<section class="panel">
+  <h2>Awaiting approval <span class="muted">({{ awaiting|length }})</span></h2>
+  {% if not awaiting %}
+    <p class="empty">Nothing waiting. Standard users' requests land here for review.</p>
+  {% endif %}
+  {% for it in awaiting %}
+  <div class="drow">
+    <div class="dcover small">
+      {% if it.cover %}<img src="{{ it.cover }}" alt="" loading="lazy">{% else %}<div class="ph">♪</div>{% endif %}
+    </div>
+    <div class="dmeta">
+      <div class="dtitle">{{ it.title }}</div>
+      <div class="dauthor">{{ it.author or 'Unknown author' }}</div>
+      <div class="dsub">Requested by <strong>{{ it.requested_by or 'unknown' }}</strong> · {{ it.created_at.replace('T', ' ') }}</div>
+    </div>
+    <div class="daction reqform">
+      <form method="post" action="/items/{{ it.id }}/approve">
+        <input type="hidden" name="csrf" value="{{ csrf }}">
+        <button class="btn primary sm" type="submit" data-busy="Approving…">Approve</button>
+      </form>
+      <form method="post" action="/items/{{ it.id }}/deny">
+        <input type="hidden" name="csrf" value="{{ csrf }}">
+        <button class="btn ghost sm" type="submit">Decline</button>
+      </form>
+    </div>
+  </div>
+  {% endfor %}
+</section>
+
+<section class="panel">
+  <h2>All requests <span class="muted">({{ items|length }})</span></h2>
+  {% if not items %}
+    <p class="empty">No other requests yet.</p>
+  {% else %}
+  <table class="results">
+    <thead><tr>
+      <th>Title</th><th>Author</th><th>Requester</th><th>Source</th><th>Status</th><th>Updated</th>
+    </tr></thead>
+    <tbody>
+    {% for it in items %}
+      <tr>
+        <td class="match" title="{{ it.title }}">{{ it.title }}</td>
+        <td class="match">{{ it.author or '—' }}</td>
+        <td>{{ it.requested_by or '—' }}</td>
+        <td class="muted">{{ it.source }}</td>
+        <td><span class="badge {{ badges.get(it.status, 'muted') }}">{{ status_labels.get(it.status, it.status) }}</span></td>
+        <td class="muted">{{ it.updated_at.replace('T', ' ') }}</td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  {% endif %}
+</section>
+{% endblock %}

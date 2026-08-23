@@ -17,7 +17,7 @@
     <a href="/discover">Request</a>
     <a href="/requests">My&nbsp;Requests</a>
     {% if library_available %}<a href="/library">Library</a>{% endif %}
-    {% if is_admin %}<a href="/">Dashboard</a><a href="/search">Search</a><a href="/tags">Tags</a>{% endif %}
+    {% if is_admin %}<a href="/">Dashboard</a><a href="/requests/all" class="navcount">Requests{% if pending_approvals %}<span class="navbadge">{{ pending_approvals }}</span>{% endif %}</a><a href="/search">Search</a><a href="/tags">Tags</a>{% endif %}
   </nav>
   <div class="usermenu">
     {% if is_admin %}<a href="/settings">Server&nbsp;Settings</a><a href="/users">Users</a>{% endif %}

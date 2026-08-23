@@ -1,6 +1,7 @@
 {% extends "base.html" %}
 {% block title %}Request · {{ instance }}{% endblock %}
 {% block content %}
+{% if error %}<div class="banner err">{{ error }}</div>{% endif %}
 <section class="panel">
   <h2>Request an audiobook</h2>
   <form method="post" action="/discover" class="searchform">

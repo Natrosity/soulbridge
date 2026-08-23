@@ -67,12 +67,16 @@ and audited, because the app becomes internet-facing.
   requests still route to approval regardless of mode — their interactive path lands
   with the Phase 4 approval queue.
 
-## Phase 4 — Per-user history, approval, quotas
+## Phase 4 — Per-user history, approval, quotas  *(done — v0.8.0)*
 
-- Link items → requesting user; "My requests" (user) vs "All requests" (admin).
-- Approval workflow for `standard` users: admin approve/deny queue.
-- Per-user request quotas (global setting), enforced at request time.
-- Audit log of request/approve/download actions.
+- Link items → requesting user; "My requests" (user) vs "All requests" (admin, `/requests/all`).
+- Approval workflow for `standard` users: admin approve/deny queue with a nav count badge.
+  Approve → `pending` (auto-grab); deny → `denied`. (Standard users' items are stored
+  `mode=auto`, so there's no interactive-picker step on approval.)
+- Per-user request quotas (`request_quota`), enforced at request time for non-admins
+  (0 = unlimited); a friendly banner explains the block. Re-requesting an existing book
+  is an upsert and never trips the quota.
+- Audit log of request/approve/deny/download actions (the events log).
 
 ## Phase 5 — Sign in with Plex
 
@@ -107,6 +111,10 @@ and audited, because the app becomes internet-facing.
   (`selecting` status the worker skips; `/request/{id}/candidates` + `/pick` + `/auto`,
   ownership-checked). Fixed ASIN tagging to fire for in-app `user` requests, not just
   `abr`. Interactive is trusted/admin-only for now (standard → approval, Phase 4).
-- **NEXT: Phase 4** (per-user history, approval queue, quotas). Standard-user requests
-  already land as `awaiting_approval`; build the admin approve/deny UI, enforce
-  `default_role`/`request_quota`, and honour the stored request `mode` on approval.
+- 2026-08-23: Phase 4 complete (v0.8.0) — admin approval queue at `/requests/all`
+  (approve→pending / deny→denied) with a nav count badge; per-user open-request quota
+  enforced at request time for non-admins with a friendly banner; audit events for
+  approve/deny. `db.count_open_requests` + `OPEN_STATUSES`; `denied` status.
+- **NEXT: Phase 5** (Sign in with Plex, Overseerr-style) — Plex PIN OAuth, verify
+  membership of the configured Plex server, auto-provision users at the global
+  `default_role`; internal accounts remain for admin / non-Plex users.

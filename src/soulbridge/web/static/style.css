@@ -68,6 +68,17 @@ main { max-width: 1000px; margin: 22px auto; padding: 0 18px; }
 .muted { color: var(--muted); font-weight: 400; }
 .empty { color: var(--muted); }
 
+.banner { padding: 11px 16px; border-radius: var(--radius); margin-bottom: 18px; font-size: 14px; }
+.banner.err { background: #1f1414; border: 1px solid #4b2020; color: #f2a3a3; }
+
+/* nav count badge (admin: requests awaiting approval) */
+.navcount { position: relative; display: inline-flex; align-items: center; gap: 6px; }
+.navbadge {
+  display: inline-flex; align-items: center; justify-content: center; min-width: 18px;
+  height: 18px; padding: 0 5px; border-radius: 9px; background: var(--accent);
+  color: #fff; font-size: 11px; font-weight: 700; line-height: 1;
+}
+
 .counts { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 18px; }
 .count-pill, .pill, .badge {
   font-size: 12px; padding: 3px 9px; border-radius: 20px; border: 1px solid var(--line);
