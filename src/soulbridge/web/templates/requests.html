@@ -17,7 +17,11 @@
       {% if it.error %}<div class="dsub err-text">{{ it.error }}</div>{% endif %}
     </div>
     <div class="daction">
-      <span class="badge {{ badges.get(it.status, 'muted') }}">{{ status_labels.get(it.status, it.status) }}</span>
+      {% if it.status == 'selecting' %}
+        <a class="btn primary sm" href="/request/{{ it.id }}/candidates">Choose&nbsp;source…</a>
+      {% else %}
+        <span class="badge {{ badges.get(it.status, 'muted') }}">{{ status_labels.get(it.status, it.status) }}</span>
+      {% endif %}
     </div>
   </div>
   {% endfor %}

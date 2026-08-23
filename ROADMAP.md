@@ -57,12 +57,15 @@ and audited, because the app becomes internet-facing.
 - `My Requests` (`/requests`) shows each user their own request statuses.
 - Nav reworked: user-facing Request / My Requests / Library first; admin extras after.
 
-## Phase 3 — Auto vs interactive requests with scores
+## Phase 3 — Auto vs interactive requests with scores  *(done — v0.7.0)*
 
-- Per-request mode selector; configurable default.
+- Per-request mode selector; configurable default (`default_request_mode` setting).
 - Interactive: present ranked Soulseek candidate groups (user/format/size/free-slot/
   **score**/accept-reject) → user picks → grab, tagged by ASIN.
 - Auto: `pick_best` → grab (existing behaviour).
+- Interactive offered to trusted/admin users (who can auto-download); standard users'
+  requests still route to approval regardless of mode — their interactive path lands
+  with the Phase 4 approval queue.
 
 ## Phase 4 — Per-user history, approval, quotas
 
@@ -99,5 +102,11 @@ and audited, because the app becomes internet-facing.
   (role-aware: trusted auto, standard awaiting-approval), My Requests page.
 - 2026-08-22: accent-folding fix (v0.6.1) — "recursión" → "recursion" in search
   queries (NFKD + ligature map).
-- **NEXT: Phase 3** (auto vs interactive requests with candidate scores) — see below.
-  Continuing in a fresh chat; this file + the `soulbridge` memory are the entry points.
+- 2026-08-23: Phase 3 complete (v0.7.0) — per-request auto/interactive mode with a
+  configurable default; interactive picker shows ranked Soulseek candidates + scores
+  (`selecting` status the worker skips; `/request/{id}/candidates` + `/pick` + `/auto`,
+  ownership-checked). Fixed ASIN tagging to fire for in-app `user` requests, not just
+  `abr`. Interactive is trusted/admin-only for now (standard → approval, Phase 4).
+- **NEXT: Phase 4** (per-user history, approval queue, quotas). Standard-user requests
+  already land as `awaiting_approval`; build the admin approve/deny UI, enforce
+  `default_role`/`request_quota`, and honour the stored request `mode` on approval.

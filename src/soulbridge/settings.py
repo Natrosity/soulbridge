@@ -58,6 +58,10 @@ SPEC: list[Field] = [
     # Behaviour
     Field("auto_download", "Auto-download requests", "true", "Behaviour", "bool",
           help="When on, approved ABR requests are searched and grabbed automatically."),
+    Field("default_request_mode", "Default request mode", "auto", "Behaviour", "select",
+          help="'auto' grabs the best Soulseek match automatically; 'interactive' lets the "
+               "requester pick from ranked candidates. Sets the pre-selected choice per request.",
+          options=("auto", "interactive")),
     Field("poll_seconds", "Poll interval (seconds)", "120", "Behaviour", "number"),
     Field("require_free_slot", "Prefer sources with a free upload slot", "true", "Behaviour", "bool"),
     Field("preferred_formats", "Preferred formats (priority order)", "m4b,m4a,mp3,flac,ogg", "Behaviour",

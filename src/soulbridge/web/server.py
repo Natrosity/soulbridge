@@ -101,12 +101,13 @@ def _startup() -> None:
 
 
 STATUS_BADGES = {
-    "awaiting_approval": "wait", "pending": "wait", "searching": "wait",
+    "awaiting_approval": "wait", "selecting": "wait", "pending": "wait", "searching": "wait",
     "downloading": "busy", "importing": "busy",
     "done": "ok", "no_results": "warn", "failed": "err", "skipped": "muted",
 }
 STATUS_LABELS = {
-    "awaiting_approval": "awaiting approval", "pending": "queued", "searching": "searching",
+    "awaiting_approval": "awaiting approval", "selecting": "choosing a source",
+    "pending": "queued", "searching": "searching",
     "downloading": "downloading", "importing": "importing", "done": "in your library",
     "no_results": "not found on Soulseek", "failed": "failed", "skipped": "skipped",
 }
@@ -300,7 +301,7 @@ def _password_problem(username: str, password: str, confirm: str, check_user: bo
 def _dashboard_ctx(request: Request) -> dict[str, Any]:
     return _ctx(
         request,
-        active=db.list_items(statuses=["pending", "searching", "downloading", "importing"]),
+        active=db.list_items(statuses=["selecting", "pending", "searching", "downloading", "importing"]),
         attention=db.list_items(statuses=["no_results", "failed"]),
         done=db.list_items(statuses=["done"], limit=30),
         counts=db.counts_by_status(), events=db.recent_events(50),
@@ -371,9 +372,16 @@ def item_skip(item_id: int):
     return RedirectResponse("/", status_code=303)
 
 
+def _default_mode() -> str:
+    m = settings.get("default_request_mode")
+    return m if m in ("auto", "interactive") else "auto"
+
+
 @app.get("/discover", response_class=HTMLResponse)
 def discover_page(request: Request, q: str = ""):
-    return templates.TemplateResponse(request, "discover.html", _ctx(request, q=q, results=None))
+    return templates.TemplateResponse(request, "discover.html", _ctx(
+        request, q=q, results=None, default_mode=_default_mode(),
+        can_interactive=auth.is_trusted(request.state.user)))
 
 
 @app.post("/discover", response_class=HTMLResponse, dependencies=[Depends(csrf_protect)])
@@ -384,22 +392,89 @@ def discover_search(request: Request, q: str = Form(...)):
     for r in results:
         ex = db.get_item_by_source("user", r["asin"]) if r.get("asin") else None
         r["requested_status"] = ex["status"] if ex else None
-    return templates.TemplateResponse(request, "discover.html", _ctx(request, q=q, results=results))
+    return templates.TemplateResponse(request, "discover.html", _ctx(
+        request, q=q, results=results, default_mode=_default_mode(),
+        can_interactive=auth.is_trusted(request.state.user)))
 
 
 @app.post("/request", dependencies=[Depends(csrf_protect)])
 def do_request(request: Request, asin: str = Form(...), title: str = Form(...),
                author: str = Form(""), narrator: str = Form(""), cover: str = Form(""),
-               year: str = Form("")):
+               year: str = Form(""), mode: str = Form("auto")):
     user = request.state.user
-    status = "pending" if auth.is_trusted(user) else "awaiting_approval"
+    # Interactive picking is only meaningful for users who can auto-download; a
+    # standard user's request is held for approval regardless of the mode chosen.
+    interactive = mode == "interactive" and auth.is_trusted(user)
+    if not auth.is_trusted(user):
+        status, mode = "awaiting_approval", "auto"
+    elif interactive:
+        status = "selecting"     # worker skips this; the user picks a source next
+    else:
+        status = "pending"
     item_id = db.upsert_item("user", asin, title=title, author=author, narrator=narrator,
-                             cover=cover or None, status=status, requested_by=user["username"])
+                             cover=cover or None, status=status, mode=mode,
+                             requested_by=user["username"])
+    if status == "selecting":
+        db.log_event(f"{user['username']} requested '{title}' (choosing a source)", item_id=item_id)
+        return RedirectResponse(f"/request/{item_id}/candidates", status_code=303)
     if status == "pending":
         worker.wake()
         db.log_event(f"{user['username']} requested '{title}'", item_id=item_id)
     else:
         db.log_event(f"{user['username']} requested '{title}' (awaiting approval)", item_id=item_id)
+    return RedirectResponse("/requests", status_code=303)
+
+
+def _owned_item(request: Request, item_id: int) -> dict[str, Any]:
+    """Fetch an item the current user is allowed to act on (owner or admin)."""
+    user = request.state.user
+    item = db.get_item(item_id)
+    if not item:
+        raise HTTPException(404)
+    if not auth.is_admin(user) and item.get("requested_by") != user["username"]:
+        raise HTTPException(403, "Not your request")
+    return item
+
+
+@app.get("/request/{item_id}/candidates", response_class=HTMLResponse)
+def request_candidates(request: Request, item_id: int):
+    item = _owned_item(request, item_id)
+    if not auth.is_trusted(request.state.user):
+        raise HTTPException(403, "Interactive requests require a trusted account")
+    results = worker.manual_search(item["title"], item.get("author") or "")
+    token = uuid.uuid4().hex
+    _SEARCH_CACHE[token] = {"ts": time.time(), "item": item_id, "results": results}
+    for k in [k for k, v in _SEARCH_CACHE.items() if time.time() - v["ts"] > 1800]:
+        _SEARCH_CACHE.pop(k, None)
+    return templates.TemplateResponse(request, "candidates.html", _ctx(
+        request, item=item, results=results, token=token))
+
+
+@app.post("/request/{item_id}/pick", dependencies=[Depends(csrf_protect)])
+def request_pick(request: Request, item_id: int, token: str = Form(...), index: int = Form(...)):
+    item = _owned_item(request, item_id)
+    if not auth.is_trusted(request.state.user):
+        raise HTTPException(403, "Interactive requests require a trusted account")
+    cached = _SEARCH_CACHE.get(token)
+    if not cached or cached.get("item") != item_id or index >= len(cached["results"]):
+        return RedirectResponse(f"/request/{item_id}/candidates", status_code=303)
+    chosen = cached["results"][index]
+    worker.grab(item_id, chosen["username"], chosen["file_list"], chosen["directory"])
+    db.log_event(f"{request.state.user['username']} picked a source for '{item['title']}' "
+                 f"({chosen['username']}, score {chosen['score']})", item_id=item_id)
+    return RedirectResponse("/requests", status_code=303)
+
+
+@app.post("/request/{item_id}/auto", dependencies=[Depends(csrf_protect)])
+def request_auto(request: Request, item_id: int):
+    """Abandon interactive selection and let the worker grab the best match."""
+    item = _owned_item(request, item_id)
+    if not auth.is_trusted(request.state.user):
+        raise HTTPException(403)
+    db.update_item(item_id, status="pending", mode="auto", attempts=0, error=None)
+    worker.wake()
+    db.log_event(f"{request.state.user['username']} switched '{item['title']}' to auto",
+                 item_id=item_id)
     return RedirectResponse("/requests", status_code=303)
 
 
@@ -475,6 +550,8 @@ async def save_settings(request: Request):
         elif f.key in form:
             val = str(form.get(f.key))
             if f.key == "default_role" and val not in ("standard", "trusted"):
+                continue
+            if f.key == "default_request_mode" and val not in ("auto", "interactive"):
                 continue
             db.set_setting(f.key, val)
     worker.wake()

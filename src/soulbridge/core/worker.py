@@ -239,7 +239,9 @@ def _write_metadata(item: dict[str, Any], dest: str, files: list[str]) -> None:
     """Tag the imported files from the Audible listing (best-effort)."""
     if not settings.get_bool("write_metadata"):
         return
-    asin = item.get("source_id") if item.get("source") == "abr" else None
+    # ABR and in-app ('user') requests both carry the Audible ASIN in source_id;
+    # 'manual' items store a random token there, so only tag by ASIN for the former.
+    asin = item.get("source_id") if item.get("source") in ("abr", "user") else None
     meta = None
     cover_bytes = None
     aud = Audnexus(settings.get("audible_region") or "us")

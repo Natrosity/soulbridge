@@ -226,6 +226,8 @@ main.wide { max-width: min(1240px, 95vw); }
 .err-text { color: var(--err); }
 .daction { flex: none; }
 .daction form { margin: 0; }
+.daction .reqform { display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
+a.btn { display: inline-block; text-decoration: none; }
 
 /* bottom toolbar (status indicators live here now) */
 body { padding-bottom: 46px; }

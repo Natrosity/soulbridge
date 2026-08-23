@@ -32,6 +32,7 @@ CREATE TABLE IF NOT EXISTS items (
     dest_path      TEXT,                           -- final library folder
     error          TEXT,
     attempts       INTEGER NOT NULL DEFAULT 0,     -- search/grab attempts (for retry cap)
+    mode           TEXT NOT NULL DEFAULT 'auto',   -- auto | interactive (how the source is chosen)
     requested_by   TEXT,
     created_at     TEXT NOT NULL,
     updated_at     TEXT NOT NULL,
@@ -84,6 +85,8 @@ def init() -> None:
         cols = {r["name"] for r in c.execute("PRAGMA table_info(items)")}
         if "attempts" not in cols:
             c.execute("ALTER TABLE items ADD COLUMN attempts INTEGER NOT NULL DEFAULT 0")
+        if "mode" not in cols:
+            c.execute("ALTER TABLE items ADD COLUMN mode TEXT NOT NULL DEFAULT 'auto'")
 
 
 @contextmanager

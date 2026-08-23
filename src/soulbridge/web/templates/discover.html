@@ -35,7 +35,7 @@
       {% if b.requested_status %}
         <span class="badge {{ badges.get(b.requested_status, 'muted') }}">{{ status_labels.get(b.requested_status, b.requested_status) }}</span>
       {% else %}
-        <form method="post" action="/request">
+        <form method="post" action="/request" class="reqform">
           <input type="hidden" name="csrf" value="{{ csrf }}">
           <input type="hidden" name="asin" value="{{ b.asin }}">
           <input type="hidden" name="title" value="{{ b.title }}">
@@ -43,7 +43,12 @@
           <input type="hidden" name="narrator" value="{{ b.narrators | join(', ') }}">
           <input type="hidden" name="cover" value="{{ b.cover or '' }}">
           <input type="hidden" name="year" value="{{ b.year or '' }}">
-          <button class="btn primary sm" type="submit">Request</button>
+          {% if can_interactive %}
+            <button class="btn sm {{ 'primary' if default_mode == 'auto' else 'ghost' }}" type="submit" name="mode" value="auto" title="Grab the best Soulseek match automatically">Auto&nbsp;request</button>
+            <button class="btn sm {{ 'primary' if default_mode == 'interactive' else 'ghost' }}" type="submit" name="mode" value="interactive" title="Pick from ranked Soulseek candidates yourself">Choose&nbsp;source…</button>
+          {% else %}
+            <button class="btn primary sm" type="submit" name="mode" value="auto">Request</button>
+          {% endif %}
         </form>
       {% endif %}
     </div>

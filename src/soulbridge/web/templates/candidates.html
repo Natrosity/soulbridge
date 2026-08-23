@@ -1,0 +1,59 @@
+{% extends "base.html" %}
+{% block title %}Choose a source · {{ instance }}{% endblock %}
+{% block content %}
+<section class="panel">
+  <div class="drow">
+    <div class="dcover small">
+      {% if item.cover %}<img src="{{ item.cover }}" alt="" loading="lazy">{% else %}<div class="ph">♪</div>{% endif %}
+    </div>
+    <div class="dmeta">
+      <div class="dtitle">{{ item.title }}</div>
+      <div class="dauthor">{{ item.author or 'Unknown author' }}</div>
+      <div class="dsub">Pick a Soulseek source below, or let Soulbridge grab the best match.</div>
+    </div>
+    <div class="daction">
+      <form method="post" action="/request/{{ item.id }}/auto">
+        <input type="hidden" name="csrf" value="{{ csrf }}">
+        <button class="btn ghost sm" type="submit">Grab best automatically</button>
+      </form>
+    </div>
+  </div>
+</section>
+
+<section class="panel">
+  <h2>Soulseek candidates <span class="muted">({{ results|length }})</span></h2>
+  {% if results %}
+  <table class="results">
+    <thead><tr>
+      <th>Match</th><th>User</th><th>Files</th><th>Format</th><th>Size</th><th>Slot</th><th>Score</th><th></th>
+    </tr></thead>
+    <tbody>
+    {% for r in results %}
+      <tr class="{{ '' if r.acceptable else 'rejected' }}">
+        <td class="match" title="{{ r.directory }}">{{ r.label or r.directory }}</td>
+        <td>{{ r.username }}</td>
+        <td>{{ r.files }}</td>
+        <td>{{ r.exts | join(', ') }}</td>
+        <td>{{ r.size_mb }} MB</td>
+        <td>{{ '✓' if r.free_slot else '—' }}</td>
+        <td class="score">{{ r.score }}</td>
+        <td>
+          <form method="post" action="/request/{{ item.id }}/pick">
+            <input type="hidden" name="csrf" value="{{ csrf }}">
+            <input type="hidden" name="token" value="{{ token }}">
+            <input type="hidden" name="index" value="{{ loop.index0 }}">
+            <button class="btn primary sm" type="submit">Grab</button>
+          </form>
+        </td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  <p class="hint">Grey rows scored below the acceptance threshold (wrong format, size, or weak
+    title match) — you can still grab them. Whatever you pick is tagged from Audible after import.</p>
+  {% else %}
+    <p class="empty">No audio candidates found on Soulseek right now.
+      <a href="/request/{{ item.id }}/candidates">Search again</a>, or grab automatically to keep retrying in the background.</p>
+  {% endif %}
+</section>
+{% endblock %}
