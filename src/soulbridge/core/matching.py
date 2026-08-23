@@ -203,8 +203,11 @@ def score_group(g: Group, title: str, author: str, prefs: dict[str, Any],
 
 
 def pick_best(responses: list[dict[str, Any]], title: str, author: str,
-              prefs: dict[str, Any], edition: Optional[dict[str, Any]] = None) -> Optional[Group]:
-    groups = group_responses(responses)
+              prefs: dict[str, Any], edition: Optional[dict[str, Any]] = None,
+              blocked: Optional[set] = None) -> Optional[Group]:
+    blocked = blocked or set()
+    groups = [g for g in group_responses(responses)
+              if (g.username, g.directory) not in blocked]
     for g in groups:
         g.score = score_group(g, title, author, prefs, edition)
     ranked = sorted((g for g in groups if g.score > 0), key=lambda g: g.score, reverse=True)

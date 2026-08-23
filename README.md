@@ -52,6 +52,10 @@ of them, and nothing tied a proper request workflow to it.
 - **Edition affinity:** ranking favours the requested narrator and release year, and avoids
   grabbing a dramatised/full-cast upload when a standard edition was requested (and vice versa).
   On import it warns about an obvious language or edition mismatch.
+- **Mismatch protection:** short, common titles no longer pull songs or the wrong author. After a
+  download, Soulbridge reads the file metadata and rejects music (by duration and genre) instead of
+  filing it; users can also flag a completed request as the wrong content. Either way the bad
+  upload is blocklisted and a different copy is tried.
 - **Self-organising:** files into `{author}/{title}` (configurable). No Readarr required.
 - **Audible tagging:** rewrites tags and cover art from the Audible listing (via
   [Audnexus](https://audnex.us)), filling gaps and only replacing existing tags when the new value

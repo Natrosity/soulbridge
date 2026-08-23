@@ -22,6 +22,13 @@
         <a class="btn primary sm js-busy" data-busy="Searching…" href="/request/{{ it.id }}/candidates">Choose&nbsp;source…</a>
       {% else %}
         <span class="badge {{ badges.get(it.status, 'muted') }}">{{ status_labels.get(it.status, it.status) }}</span>
+        {% if it.status == 'done' %}
+        <form method="post" action="/request/{{ it.id }}/mismatch" class="mismatch"
+              data-confirm="Report '{{ it.title }}' as the wrong content? It'll be removed and re-downloaded from a different source.">
+          <input type="hidden" name="csrf" value="{{ csrf }}">
+          <button class="btn ghost sm" type="submit" data-busy="Retrying…" title="Not the right book? Blocklist this source and try again">Wrong book?</button>
+        </form>
+        {% endif %}
       {% endif %}
     </div>
   </div>

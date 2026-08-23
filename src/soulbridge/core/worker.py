@@ -75,13 +75,16 @@ def manual_search(title: str, author: str = "",
     sk = _slskd()
     try:
         prefs = matching.default_prefs(settings)
+        blocked = db.blocked_pairs()
         responses: list[dict[str, Any]] = []
         for q in matching.build_queries(title, author):
             responses = sk.search(q, wait=35, floor=20)
-            groups = matching.group_responses(responses)
+            groups = [g for g in matching.group_responses(responses)
+                      if (g.username, g.directory) not in blocked]
             if any(matching.score_group(g, title, author, prefs, edition) > 0 for g in groups):
                 break
-        groups = matching.group_responses(responses)
+        groups = [g for g in matching.group_responses(responses)
+                  if (g.username, g.directory) not in blocked]
         for g in groups:
             g.score = matching.score_group(g, title, author, prefs, edition)
         ranked = sorted(groups, key=lambda g: g.score, reverse=True)
@@ -158,9 +161,10 @@ def process_item(item_id: int) -> None:
         prefs = matching.default_prefs(settings)
         edition = {"narrator": item.get("narrator"),
                    "year": (item.get("release_date") or "")[:4]}
+        blocked = db.blocked_pairs()
         best = None
         for q in matching.build_queries(title, author):
-            best = matching.pick_best(sk.search(q), title, author, prefs, edition)
+            best = matching.pick_best(sk.search(q), title, author, prefs, edition, blocked)
             if best:
                 break
         if not best:
@@ -217,20 +221,36 @@ def _check_download(item: dict[str, Any], sk: Slskd) -> None:
 def _import(item: dict[str, Any]) -> None:
     db.update_item(item["id"], status="importing")
     root = settings.get("slskd_downloads_path")
-    dest = dest_folder(item["title"], item.get("author") or "", item.get("narrator") or "")
-    os.makedirs(dest, exist_ok=True)
-    moved_paths: list[str] = []
+    # locate the downloaded files first (still in the slskd download dir)
+    locals_: list[tuple[str, str]] = []                       # (remote, local)
     for remote in json.loads(item.get("chosen_files") or "[]"):
         base = remote.rsplit("\\", 1)[-1]
         local = _find_local(base, root)
-        if not local:
-            continue
-        target = os.path.join(dest, base)
+        if local:
+            locals_.append((remote, local))
+    if not locals_:
+        db.update_item(item["id"], status="failed",
+                       error="download completed but no files found to import")
+        db.log_event(f"Import found no files for '{item['title']}'", "error", item["id"])
+        return
+
+    # Post-download check: read the actual audio metadata. If it's music, don't
+    # import it — blocklist the source and retry with a different upload.
+    reason = _detect_music([p for _, p in locals_])
+    if reason:
+        _reject_mismatch(item, reason, downloaded_files=[p for _, p in locals_])
+        return
+
+    dest = dest_folder(item["title"], item.get("author") or "", item.get("narrator") or "")
+    os.makedirs(dest, exist_ok=True)
+    moved_paths: list[str] = []
+    for _remote, local in locals_:
+        target = os.path.join(dest, os.path.basename(local))
         try:
             shutil.move(local, target)
             moved_paths.append(target)
         except Exception as e:
-            db.log_event(f"Move failed for {base}: {e}", "error", item["id"])
+            db.log_event(f"Move failed for {os.path.basename(local)}: {e}", "error", item["id"])
     if not moved_paths:
         db.update_item(item["id"], status="failed",
                        error="download completed but no files found to import")
@@ -245,6 +265,106 @@ def _import(item: dict[str, Any]) -> None:
                  f"'{item['title']}'" + (f" by {author}" if author else "")
                  + " is now in your library.")
     _post_import(item, dest)
+
+
+# music genres a downloaded audiobook should never carry
+_MUSIC_GENRES = ("rock", "pop", "electronic", "dance", "trance", "house", "techno",
+                 "hip hop", "hip-hop", "rap", "metal", "jazz", "classical", "country",
+                 "folk", "r&b", "soul", "reggae", "punk", "indie", "alternative",
+                 "blues", "edm", "disco", "funk", "ambient", "instrumental", "soundtrack")
+_SPEECH_WORDS = ("audiobook", "audio book", "spoken", "speech", "podcast")
+
+
+def _probe(path: str) -> tuple[float, Optional[str]]:
+    """(duration_seconds, genre) from a file's own tags, best-effort."""
+    try:
+        import mutagen
+        f = mutagen.File(path, easy=True)
+        if f is None:
+            return 0.0, None
+        length = float(getattr(getattr(f, "info", None), "length", 0) or 0)
+        genre = None
+        try:
+            g = f.get("genre")
+            if g:
+                genre = str(g[0])
+        except Exception:
+            genre = None
+        return length, genre
+    except Exception:
+        return 0.0, None
+
+
+def _detect_music(paths: list[str]) -> Optional[str]:
+    """Inspect the downloaded audio and return a reason string if it looks like
+    music rather than an audiobook (else None). Deliberately conservative so it
+    never rejects a genuine audiobook."""
+    durations, genres = [], []
+    for p in paths:
+        d, g = _probe(p)
+        if d:
+            durations.append(d)
+        if g:
+            genres.append(g)
+    # genre tag that is clearly music (and not marked as speech/audiobook)
+    for g in genres:
+        gl = g.lower()
+        if any(mg in gl for mg in _MUSIC_GENRES) and not any(s in gl for s in _SPEECH_WORDS):
+            return f"the files are tagged genre '{g}', which is music, not an audiobook"
+    if not durations:
+        return None                                # couldn't read durations; don't guess
+    n = len(durations)
+    total = sum(durations)
+    avg = total / n
+    if total < 20 * 60:
+        return f"only {round(total / 60)} min of audio total — too short for an audiobook"
+    if n >= 8 and avg < 6 * 60 and total < 90 * 60:
+        return (f"{n} short tracks ({round(avg / 60)} min average, {round(total / 3600, 1)}h total) "
+                "— looks like a music album")
+    return None
+
+
+def _reject_mismatch(item: dict[str, Any], reason: str,
+                     downloaded_files: Optional[list[str]] = None,
+                     imported_dest: Optional[str] = None,
+                     by: Optional[str] = None) -> None:
+    """Blocklist the source upload and re-queue the item so a different copy is tried.
+    Removes files that were downloaded (or already imported) so nothing junk lingers."""
+    user = item.get("slskd_username") or ""
+    directory = item.get("slskd_dir") or ""
+    if user and directory:
+        db.add_block(user, directory, title=item.get("title"), reason=reason)
+    for p in downloaded_files or []:
+        try:
+            os.remove(p)
+        except Exception:
+            pass
+    if imported_dest:
+        _remove_import_dir(imported_dest)
+    db.update_item(item["id"], status="pending", chosen_files=None, slskd_username=None,
+                   slskd_dir=None, dest_path=None, size=0, attempts=0, error=reason)
+    who = f" (reported by {by})" if by else ""
+    db.log_event(f"'{item['title']}' rejected as a mismatch{who}: {reason}. "
+                 f"Blocklisted '{directory}' from {user or 'unknown'} and re-queued.", "warn", item["id"])
+    notify.event("failure", "Mismatch rejected",
+                 f"'{item['title']}': {reason}. Blocklisted the source and retrying.")
+
+
+def _remove_import_dir(dest: str) -> None:
+    """Delete an imported folder, but only if it sits safely inside the library."""
+    lib = os.path.abspath(settings.get("library_path") or "")
+    p = os.path.abspath(dest or "")
+    if lib and p.startswith(lib + os.sep) and p != lib and os.path.isdir(p):
+        try:
+            shutil.rmtree(p)
+        except Exception as e:
+            db.log_event(f"cleanup failed for {p}: {e}", "warn")
+
+
+def reject_mismatch_manual(item: dict[str, Any], by: str) -> None:
+    """A user flagged a completed request as the wrong content."""
+    _reject_mismatch(item, "reported as a mismatch", imported_dest=item.get("dest_path"), by=by)
+    wake()
 
 
 _LANG_MARKERS = {

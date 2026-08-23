@@ -564,8 +564,15 @@ def all_requests(request: Request, imported: str = ""):
             imported, ("ok", f"Imported {imported} request(s) from AudioBookRequest."))
         banner = {"level": level, "msg": msg}
     return templates.TemplateResponse(request, "all_requests.html", _ctx(
-        request, awaiting=awaiting, items=others, banner=banner,
+        request, awaiting=awaiting, items=others, banner=banner, blocks=db.list_blocks(),
         abr_configured=bool(settings.get("abr_url") and settings.get("abr_api_key"))))
+
+
+@app.post("/blocklist/{block_id}/remove", dependencies=[Depends(csrf_protect)])
+def blocklist_remove(request: Request, block_id: int):
+    _require_admin(request)
+    db.remove_block(block_id)
+    return RedirectResponse("/requests/all", status_code=303)
 
 
 @app.post("/requests/import-abr", dependencies=[Depends(csrf_protect)])
@@ -816,6 +823,17 @@ def request_pick(request: Request, item_id: int, token: str = Form(...), index: 
     worker.grab(item_id, chosen["username"], chosen["file_list"], chosen["directory"])
     db.log_event(f"{request.state.user['username']} picked a source for '{item['title']}' "
                  f"({chosen['username']}, score {chosen['score']})", item_id=item_id)
+    return RedirectResponse("/requests", status_code=303)
+
+
+@app.post("/request/{item_id}/mismatch", dependencies=[Depends(csrf_protect)])
+def request_mismatch(request: Request, item_id: int):
+    """User (or admin) flags a completed request as the wrong content: blocklist the
+    source, remove the imported files, and retry with a different upload."""
+    item = _owned_item(request, item_id)
+    if item["status"] != "done":
+        return RedirectResponse("/requests", status_code=303)
+    worker.reject_mismatch_manual(item, request.state.user["username"])
     return RedirectResponse("/requests", status_code=303)
 
 

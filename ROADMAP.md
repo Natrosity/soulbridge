@@ -133,6 +133,14 @@ and audited, because the app becomes internet-facing.
 - 2026-08-23: Phase 6 complete (v0.10.0) — Apprise notifications (request/complete/
   failure + test button; new `apprise` dep → image rebuild), ABR history import,
   cutover-ready. All six phases shipped; ABR retirement is now an operator choice.
+- 2026-08-23: Mismatch protection + blocklist (v0.13.0) — post-download metadata analysis reads the
+  downloaded audio (mutagen) and, if it's music (too short, music genre tag, or a short-track album),
+  rejects it *before* import, blocklists that Soulseek upload, and re-queues. Users get a "Wrong
+  book?" button on completed requests that does the same (and removes the imported files); admins
+  see and can clear the blocklist on /requests/all. The matcher skips blocklisted (user, dir) pairs.
+- 2026-08-23: Matching refinement (v0.12.2) — content-type awareness (music path/album vs audiobook)
+  and a stronger generic-title guard (<=2 distinctive words require the author). Fixed short-title
+  grabs pulling songs / wrong-author books.
 - 2026-08-23: Timezone support + region-correct Audible links (v0.12.1) — all timestamps
   now respect the `TZ` env var (via `zoneinfo`; `db.now()`/`db.today()` replace the old UTC
   `gmtime` calls) instead of hardcoded UTC. Audible product URLs already followed the

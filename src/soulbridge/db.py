@@ -74,6 +74,15 @@ CREATE TABLE IF NOT EXISTS users (
     created_at      TEXT NOT NULL,
     last_login      TEXT
 );
+CREATE TABLE IF NOT EXISTS blocklist (
+    id        INTEGER PRIMARY KEY AUTOINCREMENT,
+    username  TEXT NOT NULL,
+    directory TEXT NOT NULL,               -- remote dir of the bad upload
+    title     TEXT,                         -- the book it was wrongly matched to
+    reason    TEXT,
+    ts        TEXT NOT NULL,
+    UNIQUE(username, directory)
+);
 CREATE INDEX IF NOT EXISTS idx_items_status ON items(status);
 CREATE INDEX IF NOT EXISTS idx_events_ts ON events(ts);
 CREATE INDEX IF NOT EXISTS idx_tagwrites_ts ON tag_writes(id);
@@ -290,6 +299,36 @@ def recent_tag_writes(limit: int = 100) -> list[dict[str, Any]]:
                 d["fields"] = []
             out.append(d)
         return out
+
+
+# ---- blocklist (bad Soulseek uploads to never grab again) ----
+def add_block(username: str, directory: str, title: Optional[str] = None,
+              reason: Optional[str] = None) -> None:
+    with connect() as c:
+        c.execute(
+            "INSERT INTO blocklist(username,directory,title,reason,ts) VALUES(?,?,?,?,?) "
+            "ON CONFLICT(username,directory) DO UPDATE SET reason=excluded.reason, "
+            "title=excluded.title, ts=excluded.ts",
+            (username or "", directory or "", title, reason, _now()),
+        )
+
+
+def blocked_pairs() -> set:
+    """Set of (username, directory) the matcher must skip."""
+    with connect() as c:
+        return {(r["username"], r["directory"])
+                for r in c.execute("SELECT username, directory FROM blocklist")}
+
+
+def list_blocks(limit: int = 200) -> list[dict[str, Any]]:
+    with connect() as c:
+        return [dict(r) for r in c.execute(
+            "SELECT * FROM blocklist ORDER BY id DESC LIMIT ?", (limit,))]
+
+
+def remove_block(block_id: int) -> None:
+    with connect() as c:
+        c.execute("DELETE FROM blocklist WHERE id=?", (block_id,))
 
 
 # ---- users ----

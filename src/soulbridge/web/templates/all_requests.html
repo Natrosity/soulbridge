@@ -75,4 +75,33 @@
   </table>
   {% endif %}
 </section>
+
+<section class="panel">
+  <h2>Blocked sources <span class="muted">({{ blocks|length }})</span></h2>
+  <p class="hint" style="margin-top:0">Soulseek uploads flagged as the wrong content (auto-detected
+    as music, or reported by a user). These are skipped on every future search.</p>
+  {% if not blocks %}
+    <p class="empty">Nothing blocked.</p>
+  {% else %}
+  <table class="results">
+    <thead><tr><th>Uploader</th><th>Folder</th><th>Flagged for</th><th>Reason</th><th></th></tr></thead>
+    <tbody>
+    {% for b in blocks %}
+      <tr>
+        <td>{{ b.username }}</td>
+        <td class="match" title="{{ b.directory }}">{{ b.directory }}</td>
+        <td class="muted">{{ b.title or '—' }}</td>
+        <td class="muted">{{ b.reason or '—' }}</td>
+        <td>
+          <form method="post" action="/blocklist/{{ b.id }}/remove" data-confirm="Un-block this source?">
+            <input type="hidden" name="csrf" value="{{ csrf }}">
+            <button class="btn ghost sm" type="submit">Unblock</button>
+          </form>
+        </td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  {% endif %}
+</section>
 {% endblock %}

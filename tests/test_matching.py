@@ -109,6 +109,18 @@ def test_accepts_correct_author_for_generic_title():
     assert best and best.username == "g"
 
 
+def test_blocklisted_source_is_skipped():
+    resp = [
+        _resp("good", True, [_f(r"x\Audiobooks\Rachel Reid - The Long Game\The Long Game - Rachel Reid.m4b", 250_000_000)]),
+        _resp("bad", True, [_f(r"y\Audiobooks\Rachel Reid - The Long Game\The Long Game - Rachel Reid.m4b", 250_000_000)]),
+    ]
+    blocked = {("bad", r"y\Audiobooks\Rachel Reid - The Long Game")}
+    best = m.pick_best(resp, "The Long Game", "Rachel Reid", PREFS, blocked=blocked)
+    assert best and best.username == "good"
+    # if the only source is blocked, nothing is returned
+    assert m.pick_best([resp[1]], "The Long Game", "Rachel Reid", PREFS, blocked=blocked) is None
+
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for fn in fns:

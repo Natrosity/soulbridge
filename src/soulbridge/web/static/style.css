@@ -291,8 +291,9 @@ a.libcard { text-decoration: none; color: inherit; }
 .dsub { color: var(--muted); font-size: 12px; margin-top: 2px; }
 .dsub2 { color: var(--muted); font-size: 12px; margin-top: 1px; }
 .err-text { color: var(--err); }
-.daction { flex: none; }
+.daction { flex: none; text-align: right; }
 .daction form { margin: 0; }
+.daction .mismatch { margin-top: 6px; }
 .daction .reqform { display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
 a.btn { display: inline-block; text-decoration: none; }
 
