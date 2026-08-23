@@ -14,6 +14,11 @@ STOP = {"the", "a", "an", "of", "and", "to", "in", "my", "is", "for"}
 # markers of a dramatised / full-cast edition (normalised form, no punctuation)
 DRAMATIZED = ("full cast", "dramatized", "dramatised", "multicast", "multi cast",
               "graphic audio", "graphicaudio", "radio drama", "audio drama")
+# path/context signals to tell an audiobook from music or other audio
+AUDIOBOOK_DIRS = {"audiobook", "audiobooks", "audible", "hoerbuch", "horbuch", "hoerbucher"}
+AUDIOBOOK_MARKERS = ("unabridged", "audiobook", "narrated", "read by", "narrator")
+MUSIC_DIRS = {"music", "album", "albums", "discography", "discographies", "songs",
+              "singles", "soundtrack", "soundtracks", "remixes", "mp3s", "flacs"}
 
 
 # ligatures / special letters that NFKD does not decompose to ASCII
@@ -113,6 +118,7 @@ def group_responses(responses: list[dict[str, Any]]) -> list[Group]:
 
 def score_group(g: Group, title: str, author: str, prefs: dict[str, Any],
                 edition: Optional[dict[str, Any]] = None) -> float:
+    dirnorm = norm(g.directory)
     text = norm(g.directory + " " + " ".join(f["filename"] for f in g.files))
     want = tokens(title)
     if want:
@@ -123,14 +129,30 @@ def score_group(g: Group, title: str, author: str, prefs: dict[str, Any],
         return -1.0                                   # not confidently this book
     if any(s in text for s in SPAM if s != "abridged"):
         return -1.0
-    # Generic one-word titles ("Fire", "It", "1984") match far too much — a bare
-    # "fire" hits music, games, anything. When the title carries <=1 distinctive
-    # word, insist the author's surname appears so we don't grab the wrong thing.
+
     surname = norm(author).split()[-1] if author else ""
-    distinctive = [t for t in want if len(t) >= 3]
-    if len(distinctive) <= 1 and surname and surname not in text:
-        return -1.0
+    has_author = bool(surname and len(surname) >= 3 and surname in text)
+
+    # --- content type: is this actually an audiobook, or music / something else? ---
+    dirtokens = set(dirnorm.split())
+    audiobook_ctx = bool(dirtokens & AUDIOBOOK_DIRS) or any(m in text for m in AUDIOBOOK_MARKERS)
+    music_ctx = bool(dirtokens & MUSIC_DIRS) and not audiobook_ctx
     size_mb = g.total_size / 1_048_576
+    n = len(g.files)
+    avg_mb = size_mb / max(n, 1)
+    # a pile of small tracks is an album, not an audiobook (chapters run long)
+    looks_like_album = n >= 6 and avg_mb < 12
+    if music_ctx and (looks_like_album or n <= 3):
+        return -1.0                                   # clearly a song/album, not a book
+
+    # Generic short titles ("Fire", "Game Changer", "Role Model", "The Long Game")
+    # collide with songs and with same-named books by other authors. When the title
+    # carries <=2 distinctive words, insist the requested author appears so we don't
+    # grab a remix or the wrong writer's book.
+    distinctive = [t for t in want if len(t) >= 3]
+    if len(distinctive) <= 2 and surname and not has_author:
+        return -1.0
+
     if size_mb < prefs["min_mb"] or size_mb > prefs["max_mb"]:
         return -1.0
 
@@ -140,15 +162,20 @@ def score_group(g: Group, title: str, author: str, prefs: dict[str, Any],
     best_ext = min((order.index(e[1:]) for e in g.exts if e[1:] in order), default=len(order))
     score += (len(order) - best_ext) * 8
     # a single m4b is the ideal audiobook artifact
-    if g.exts == {".m4b"} and len(g.files) == 1:
+    if g.exts == {".m4b"} and n == 1:
         score += 20
     if g.free_slot:
         score += 15
     elif prefs["require_free_slot"]:
         score -= 25
-    surname = norm(author).split()[-1] if author else ""
-    if surname and surname in text:
+    if has_author:
         score += 10
+    if audiobook_ctx:
+        score += 8                                    # filed as / labelled an audiobook
+    if music_ctx:
+        score -= 40                                   # under a music path with no book markers
+    if looks_like_album:
+        score -= 20
     if "unabridged" in text:
         score += 6
     if "abridged" in text and "unabridged" not in text:

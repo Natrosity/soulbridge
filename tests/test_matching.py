@@ -79,6 +79,36 @@ def test_edition_avoids_full_cast_when_standard_requested():
     assert best and best.username == "standard"
 
 
+def test_rejects_music_remix_for_short_title():
+    # "Game Changer" pulled two trance remixes from a Music folder — must not match.
+    resp = [_resp("dj", True, [
+        _f(r"@@civju\Music\Apple Lossless\Bryan Kearney\Bryan Kearney - The Game Changer (Standerwick Remix).m4a", 57_000_000),
+        _f(r"@@civju\Music\Apple Lossless\Bryan Kearney\Bryan Kearney - The Game Changer.m4a", 58_000_000),
+    ])]
+    assert m.pick_best(resp, "Game Changer", "Rachel Reid", PREFS) is None
+
+
+def test_rejects_music_album_for_short_title():
+    # "Role Model" pulled a 10-track Bodyjar album — must not match.
+    files = [_f(rf"@@fgkzr\Music\Bodyjar\Role Model\{i:02d} track.mp3", 7_600_000) for i in range(1, 11)]
+    assert m.pick_best([_resp("wally", True, files)], "Role Model", "Rachel Reid", PREFS) is None
+
+
+def test_rejects_wrong_author_for_generic_title():
+    # "The Long Game" grabbed a single m4b by the WRONG author (Eric Becker).
+    resp = [_resp("k", True, [
+        _f(r"@@zhezk\Audiobooks\The Long Game by Eric Becker\The Long Game by Eric Becker.m4b", 258_000_000)])]
+    assert m.pick_best(resp, "The Long Game", "Rachel Reid", PREFS) is None
+
+
+def test_accepts_correct_author_for_generic_title():
+    # the right book (author named) should still be grabbed.
+    resp = [_resp("g", True, [
+        _f(r"x\Audiobooks\Rachel Reid - The Long Game\Rachel Reid - The Long Game.m4b", 250_000_000)])]
+    best = m.pick_best(resp, "The Long Game", "Rachel Reid", PREFS)
+    assert best and best.username == "g"
+
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for fn in fns:
