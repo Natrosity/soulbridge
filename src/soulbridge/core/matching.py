@@ -66,6 +66,39 @@ def build_queries(title: str, author: str) -> list[str]:
     return out
 
 
+def book_number(subtitle: str) -> Optional[int]:
+    """Extract a series position from a subtitle like 'Mistborn, Book 1' -> 1."""
+    if not subtitle:
+        return None
+    m = re.search(r"\bbook\s+(\d{1,3})\b", norm(subtitle))
+    return int(m.group(1)) if m else None
+
+
+def build_siblings(results: list[dict[str, Any]], asin: str, title: str) -> list[frozenset]:
+    """Given Audible results for a series, return the distinctive token-sets of the
+    OTHER books (a different series position) so the matcher can reject them. The
+    requested book's own words and the series name are stripped out."""
+    me = next((r for r in results if r.get("asin") == asin), None)
+    if not me:
+        return []
+    my_num = book_number(me.get("subtitle"))
+    if my_num is None:
+        return []                                    # can't place the requested book — don't guess
+    common = set(tokens(title)) | set(tokens(me.get("subtitle") or "")) | set(tokens(me.get("series") or ""))
+    sibs: list[frozenset] = []
+    for r in results:
+        if r.get("asin") == asin:
+            continue
+        num = book_number(r.get("subtitle"))
+        if num is None or num == my_num:
+            continue                                 # unknown or same position — not a distinct sibling
+        toks = frozenset(t for t in tokens(r.get("title") or "")
+                         if t not in common and len(t) >= 3)
+        if toks:
+            sibs.append(toks)
+    return sibs
+
+
 def ext_of(path: str) -> str:
     m = re.search(r"(\.[a-z0-9]+)$", path.lower())
     return m.group(1) if m else ""
@@ -117,7 +150,8 @@ def group_responses(responses: list[dict[str, Any]]) -> list[Group]:
 
 
 def score_group(g: Group, title: str, author: str, prefs: dict[str, Any],
-                edition: Optional[dict[str, Any]] = None) -> float:
+                edition: Optional[dict[str, Any]] = None,
+                siblings: Optional[list[frozenset]] = None) -> float:
     dirnorm = norm(g.directory)
     text = norm(g.directory + " " + " ".join(f["filename"] for f in g.files))
     want = tokens(title)
@@ -129,6 +163,13 @@ def score_group(g: Group, title: str, author: str, prefs: dict[str, Any],
         return -1.0                                   # not confidently this book
     if any(s in text for s in SPAM if s != "abridged"):
         return -1.0
+    # a DIFFERENT book in the same series (e.g. requested Mistborn bk1, this is
+    # 'The Alloy of Law' bk4) — the title collides on the series name, so reject
+    # when the files clearly name another entry.
+    if siblings:
+        toks = set(text.split())
+        if any(sib and sib <= toks for sib in siblings):
+            return -1.0
 
     surname = norm(author).split()[-1] if author else ""
     has_author = bool(surname and len(surname) >= 3 and surname in text)
@@ -204,12 +245,13 @@ def score_group(g: Group, title: str, author: str, prefs: dict[str, Any],
 
 def pick_best(responses: list[dict[str, Any]], title: str, author: str,
               prefs: dict[str, Any], edition: Optional[dict[str, Any]] = None,
-              blocked: Optional[set] = None) -> Optional[Group]:
+              blocked: Optional[set] = None,
+              siblings: Optional[list[frozenset]] = None) -> Optional[Group]:
     blocked = blocked or set()
     groups = [g for g in group_responses(responses)
               if (g.username, g.directory) not in blocked]
     for g in groups:
-        g.score = score_group(g, title, author, prefs, edition)
+        g.score = score_group(g, title, author, prefs, edition, siblings)
     ranked = sorted((g for g in groups if g.score > 0), key=lambda g: g.score, reverse=True)
     return ranked[0] if ranked else None
 

@@ -8,12 +8,14 @@ import os
 import re
 import shutil
 import threading
+import time
 from typing import Any, Optional
 
 from .. import db, settings
 from ..clients import audnexus, notify
 from ..clients.abr import ABR
 from ..clients.abs import ABS
+from ..clients.audible import Audible
 from ..clients.audnexus import Audnexus
 from ..clients.jellyfin import Jellyfin
 from ..clients.plex import Plex
@@ -69,8 +71,35 @@ def _find_local(basename: str, root: str) -> Optional[str]:
 
 
 # ---------- public actions ----------
+_SIBLING_CACHE: dict[str, tuple[float, list]] = {}      # asin -> (ts, [frozenset,...])
+
+
+def series_siblings(item: dict[str, Any]) -> list:
+    """Distinctive token-sets of the OTHER books in this book's series, so the matcher
+    won't grab the wrong entry when the title collides on the series name (Mistborn).
+    Cached per ASIN for a day; empty when the book isn't part of a numbered series."""
+    asin = item.get("source_id")
+    if item.get("source") not in ("abr", "user") or not asin:
+        return []
+    cached = _SIBLING_CACHE.get(asin)
+    if cached and time.time() - cached[0] < 86400:
+        return cached[1]
+    title = item.get("title") or ""
+    aud = Audible(settings.get("audible_region") or "us")
+    try:
+        results = aud.search(title, num=40)
+    except Exception:
+        results = []
+    finally:
+        aud.close()
+    sibs = matching.build_siblings(results, asin, title)
+    _SIBLING_CACHE[asin] = (time.time(), sibs)
+    return sibs
+
+
 def manual_search(title: str, author: str = "",
-                  edition: Optional[dict[str, Any]] = None) -> list[dict[str, Any]]:
+                  edition: Optional[dict[str, Any]] = None,
+                  siblings: Optional[list] = None) -> list[dict[str, Any]]:
     """Search Soulseek and return ranked candidate groups (for the web UI)."""
     sk = _slskd()
     try:
@@ -81,12 +110,12 @@ def manual_search(title: str, author: str = "",
             responses = sk.search(q, wait=35, floor=20)
             groups = [g for g in matching.group_responses(responses)
                       if (g.username, g.directory) not in blocked]
-            if any(matching.score_group(g, title, author, prefs, edition) > 0 for g in groups):
+            if any(matching.score_group(g, title, author, prefs, edition, siblings) > 0 for g in groups):
                 break
         groups = [g for g in matching.group_responses(responses)
                   if (g.username, g.directory) not in blocked]
         for g in groups:
-            g.score = matching.score_group(g, title, author, prefs, edition)
+            g.score = matching.score_group(g, title, author, prefs, edition, siblings)
         ranked = sorted(groups, key=lambda g: g.score, reverse=True)
         return [
             {
@@ -162,9 +191,10 @@ def process_item(item_id: int) -> None:
         edition = {"narrator": item.get("narrator"),
                    "year": (item.get("release_date") or "")[:4]}
         blocked = db.blocked_pairs()
+        siblings = series_siblings(item)
         best = None
         for q in matching.build_queries(title, author):
-            best = matching.pick_best(sk.search(q), title, author, prefs, edition, blocked)
+            best = matching.pick_best(sk.search(q), title, author, prefs, edition, blocked, siblings)
             if best:
                 break
         if not best:

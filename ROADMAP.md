@@ -133,6 +133,12 @@ and audited, because the app becomes internet-facing.
 - 2026-08-23: Phase 6 complete (v0.10.0) — Apprise notifications (request/complete/
   failure + test button; new `apprise` dep → image rebuild), ABR history import,
   cutover-ready. All six phases shipped; ABR retirement is now an operator choice.
+- 2026-08-24: Series disambiguation (v0.13.1) — a book whose title collides on the series name
+  (e.g. "Mistborn" = Book 1) no longer grabs a different entry ("The Alloy of Law", Book 4) that
+  shares the series name, narrator, and year. Fetches the series' sibling books from Audible
+  (`matching.build_siblings`, cached per ASIN) and rejects a candidate whose files clearly name a
+  different numbered entry. Verified live on the real "Mistborn" request (Final Empire now top,
+  Alloy of Law rejected).
 - 2026-08-23: Mismatch protection + blocklist (v0.13.0) — post-download metadata analysis reads the
   downloaded audio (mutagen) and, if it's music (too short, music genre tag, or a short-track album),
   rejects it *before* import, blocklists that Soulseek upload, and re-queues. Users get a "Wrong

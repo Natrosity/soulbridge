@@ -49,9 +49,11 @@ of them, and nothing tied a proper request workflow to it.
 - **Smart Soulseek matching:** title-first queries, summary/sample filtering, format and size
   preferences, a bias toward single-file M4Bs, and free-slot awareness. Generic one-word titles
   require the author to match so "Fire" doesn't pull a music track.
-- **Edition affinity:** ranking favours the requested narrator and release year, and avoids
-  grabbing a dramatised/full-cast upload when a standard edition was requested (and vice versa).
-  On import it warns about an obvious language or edition mismatch.
+- **Edition & series awareness:** ranking favours the requested narrator and release year, and
+  avoids grabbing a dramatised/full-cast upload when a standard edition was requested (and vice
+  versa). For books in a series it recognises the sibling entries, so requesting "Mistborn" (Book 1)
+  won't pull "The Alloy of Law" just because both share the series name. On import it warns about an
+  obvious language or edition mismatch.
 - **Mismatch protection:** short, common titles no longer pull songs or the wrong author. After a
   download, Soulbridge reads the file metadata and rejects music (by duration and genre) instead of
   filing it; users can also flag a completed request as the wrong content. Either way the bad

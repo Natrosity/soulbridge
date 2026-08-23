@@ -121,6 +121,38 @@ def test_blocklisted_source_is_skipped():
     assert m.pick_best([resp[1]], "The Long Game", "Rachel Reid", PREFS, blocked=blocked) is None
 
 
+MISTBORN_RESULTS = [
+    {"asin": "B1", "title": "Mistborn", "subtitle": "Mistborn, Book 1", "series": "The Cosmere"},
+    {"asin": "B2", "title": "The Well of Ascension", "subtitle": "Mistborn, Book 2", "series": "The Mistborn Saga"},
+    {"asin": "B3", "title": "The Hero of Ages", "subtitle": "Mistborn, Book 3", "series": "The Mistborn Saga"},
+    {"asin": "B4", "title": "The Alloy of Law", "subtitle": "Mistborn, Book 4", "series": "Wax and Wayne"},
+]
+
+
+def test_build_siblings_excludes_other_series_entries():
+    sibs = m.build_siblings(MISTBORN_RESULTS, "B1", "Mistborn")
+    assert frozenset({"alloy", "law"}) in sibs
+    assert frozenset({"well", "ascension"}) in sibs
+    assert frozenset({"hero", "ages"}) in sibs
+    # nothing that would match the requested book itself
+    assert all("mistborn" not in s for s in sibs)
+
+
+def test_rejects_wrong_series_entry():
+    # requested "Mistborn" (Book 1); the author folder carries "Sanderson" so the
+    # generic-title guard passes — the sibling check must still reject Alloy of Law.
+    sibs = m.build_siblings(MISTBORN_RESULTS, "B1", "Mistborn")
+    ed = {"narrator": "Michael Kramer", "year": "2011"}
+    alloy = [_resp("u", True, [_f(
+        r"Brandon Sanderson\Alloy of Law, The - A Mistborn Novel read by Michael Kramer (2011).m4b", 296_000_000)])]
+    assert m.pick_best(alloy, "Mistborn", "Brandon Sanderson", PREFS, edition=ed, siblings=sibs) is None
+    # the right book (Book 1 / Final Empire) is still accepted
+    fe = [_resp("u", True, [_f(
+        r"Brandon Sanderson\Final Empire, The - Mistborn Book 1 read by Michael Kramer (2011).m4b", 673_000_000)])]
+    best = m.pick_best(fe, "Mistborn", "Brandon Sanderson", PREFS, edition=ed, siblings=sibs)
+    assert best and best.username == "u"
+
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for fn in fns:
