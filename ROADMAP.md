@@ -133,6 +133,13 @@ and audited, because the app becomes internet-facing.
 - 2026-08-23: Phase 6 complete (v0.10.0) — Apprise notifications (request/complete/
   failure + test button; new `apprise` dep → image rebuild), ABR history import,
   cutover-ready. All six phases shipped; ABR retirement is now an operator choice.
+- 2026-08-24: Alternate-edition detection + liberal tag cleanup (v0.14.0) — post-download, read the
+  file's own narrator/year (composer + year tags) and, if they match a different edition of the same
+  book (via Audible alternate-edition lookup), tag it as that edition and flag "Alternate edition"
+  in the history (`items.note`) instead of mislabelling it as the requested one. Also, once matched
+  to an edition, title/album/narrator/genre/year/description tags are replaced outright (not just
+  superset-enriched) via `tagging.decide_field` + `AUTHORITATIVE`. Verified alternate detection on
+  real data (The Hobbit → Inglis/Serkis/Shaw editions).
 - 2026-08-24: Bitrate tiebreaker + series book-number signal (v0.13.2) — among otherwise-equal
   candidates the higher-bitrate rip now wins (bounded +0–3.2, a pure tiebreaker; bitrate shown in
   the picker). Plus a book-number signal: a candidate that names the requested series position gets

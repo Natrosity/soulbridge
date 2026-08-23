@@ -15,6 +15,7 @@
       <div class="dtitle">{{ it.title }}</div>
       <div class="dauthor">{{ it.author or 'Unknown author' }}</div>
       {% if it.status == 'scheduled' and it.release_date %}<div class="dsub"><span class="tag-upcoming">Releases {{ it.release_date }}</span> — we'll search then</div>{% endif %}
+      {% if it.status == 'done' and it.note %}<div class="dsub"><span class="badge warn sm">Alternate edition</span> {{ it.note }}</div>{% endif %}
       {% if it.error %}<div class="dsub err-text">{{ it.error }}</div>{% endif %}
     </div>
     <div class="daction">

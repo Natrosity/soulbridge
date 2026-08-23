@@ -4,7 +4,7 @@ import sys
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
-from soulbridge.core.tagging import decide  # noqa: E402
+from soulbridge.core.tagging import decide, decide_field  # noqa: E402
 
 
 def test_fills_empty():
@@ -27,6 +27,22 @@ def test_keeps_on_conflict():
 
 def test_unchanged_when_equal():
     assert decide("Fire", "fire") == ("Fire", "unchanged")
+
+
+def test_liberal_overwrites_authoritative_fields():
+    # a messy/inaccurate narrator is replaced outright once we've matched an edition
+    assert decide_field("random ripper v2", "Rob Inglis", "composer", True) == ("Rob Inglis", "overwrite")
+    assert decide_field("the hobbit (unabridged) [2003]", "The Hobbit", "title", True) == ("The Hobbit", "overwrite")
+
+
+def test_liberal_leaves_non_authoritative_conservative():
+    # author (artist) is not in the authoritative set -> keep the richer existing value
+    assert decide_field("Kristin Cashore 2012", "Kristin Cashore", "artist", True) == ("Kristin Cashore 2012", "keep")
+
+
+def test_gap_fill_only_when_overwrite_off():
+    assert decide_field("Old Title", "New Title", "title", False) == ("Old Title", "keep")
+    assert decide_field("", "New Title", "title", False) == ("New Title", "write")
 
 
 if __name__ == "__main__":

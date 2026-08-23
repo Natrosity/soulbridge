@@ -30,6 +30,11 @@ LABELS = {
 }
 ORDER = list(LABELS.keys())
 
+# Once a download is confidently matched to an edition, these fields are the
+# authoritative source of truth: replace messy/inaccurate existing values outright
+# (when overwrite is on) rather than only enriching supersets.
+AUTHORITATIVE = {"title", "album", "composer", "year", "genre", "comment"}
+
 
 def _norm(s: str) -> str:
     s = unicodedata.normalize("NFKD", (s or "").lower()).encode("ascii", "ignore").decode("ascii")
@@ -49,6 +54,20 @@ def decide(old: str, new: str) -> tuple[str, str]:
     if ot and ot <= nt:               # new contains everything old had -> enrich
         return new, "overwrite"
     return old, "keep"                 # old has extra info or contradicts -> keep
+
+
+def decide_field(old: str, new: str, field: str, overwrite: bool) -> tuple[str, str]:
+    """Field-aware merge. For the authoritative fields (once matched to an edition)
+    the new value replaces the old outright when overwrite is on; everything else
+    uses the conservative superset merge."""
+    if overwrite and field in AUTHORITATIVE:
+        if _norm(old or "") == _norm(new or ""):
+            return old, "unchanged"
+        return new, ("overwrite" if old else "write")
+    final, action = decide(old, new)
+    if not overwrite and action == "overwrite":
+        return old, "keep"                             # gap-fill only
+    return final, action
 
 
 def build_logical(meta: dict[str, Any]) -> dict[str, str]:
@@ -241,9 +260,7 @@ def write_file(path: str, meta: dict[str, Any], cover: Optional[bytes], cover_mi
         if not new:
             continue
         old = ad.get(f)
-        final, action = decide(old, new)
-        if not overwrite and action == "overwrite":
-            final, action = old, "keep"       # user chose gap-fill only
+        final, action = decide_field(old, new, f, overwrite)
         if action in ("write", "overwrite"):
             ad.put(f, final)
         if action in ("write", "overwrite", "keep"):

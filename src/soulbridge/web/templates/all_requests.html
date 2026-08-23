@@ -63,7 +63,7 @@
     <tbody>
     {% for it in items %}
       <tr>
-        <td class="match" title="{{ it.title }}">{{ it.title }}</td>
+        <td class="match" title="{{ it.title }}{% if it.note %} — {{ it.note }}{% endif %}">{{ it.title }}{% if it.note %} <span class="badge warn sm">alt</span>{% endif %}</td>
         <td class="match">{{ it.author or '—' }}</td>
         <td>{{ it.requested_by or '—' }}</td>
         <td class="muted">{{ it.source }}</td>

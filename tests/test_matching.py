@@ -153,6 +153,26 @@ def test_rejects_wrong_series_entry():
     assert best and best.username == "u"
 
 
+EDITION_RESULTS = [
+    {"asin": "A", "title": "The Hobbit", "subtitle": None, "narrators": ["Rob Inglis"], "year": 2012},
+    {"asin": "B", "title": "The Hobbit", "subtitle": None, "narrators": ["Andy Serkis"], "year": 2020},
+    {"asin": "C", "title": "The Fellowship of the Ring", "subtitle": None, "narrators": ["Rob Inglis"], "year": 2012},
+]
+
+
+def test_build_editions_finds_same_book_alternates():
+    alts = m.build_editions(EDITION_RESULTS, "A", "The Hobbit")
+    assert len(alts) == 1 and alts[0]["asin"] == "B"     # B same book, C is a different book
+
+
+def test_pick_edition_switches_on_narrator():
+    alts = m.build_editions(EDITION_RESULTS, "A", "The Hobbit")
+    target = {"narrators": ["Rob Inglis"], "year": "2012"}
+    assert m.pick_edition("Andy Serkis", "2020", target, alts)["asin"] == "B"   # file is Serkis
+    assert m.pick_edition("Rob Inglis", "2012", target, alts) is None           # file is the target
+    assert m.pick_edition("", "", target, alts) is None                         # no file metadata
+
+
 def test_book_number_lifts_correct_series_entry():
     # requested Book 1; a file that names "Book 1" beats a sibling that doesn't,
     # even when the sibling check can't reject it (no number on its own listing).

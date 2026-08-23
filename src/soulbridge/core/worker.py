@@ -71,32 +71,48 @@ def _find_local(basename: str, root: str) -> Optional[str]:
 
 
 # ---------- public actions ----------
-_SIBLING_CACHE: dict[str, tuple[float, list]] = {}      # asin -> (ts, [frozenset,...])
+_RESULTS_CACHE: dict[str, tuple[float, list]] = {}      # asin -> (ts, Audible results)
 
 
-def series_siblings(item: dict[str, Any]) -> tuple[list, Optional[int]]:
-    """(sibling token-sets, requested book number) for this book's series, so the
-    matcher won't grab a different entry when the title collides on the series name
-    (Mistborn). Cached per ASIN for a day; empty when it isn't a numbered series."""
+def _search_results(item: dict[str, Any]) -> list[dict[str, Any]]:
+    """Audible search results for this book's title, cached per ASIN for a day.
+    Shared by sibling detection and alternate-edition detection."""
     asin = item.get("source_id")
     if item.get("source") not in ("abr", "user") or not asin:
-        return [], None
-    cached = _SIBLING_CACHE.get(asin)
+        return []
+    cached = _RESULTS_CACHE.get(asin)
     if cached and time.time() - cached[0] < 86400:
         return cached[1]
-    title = item.get("title") or ""
     aud = Audible(settings.get("audible_region") or "us")
     try:
-        results = aud.search(title, num=40)
+        results = aud.search(item.get("title") or "", num=40)
     except Exception:
         results = []
     finally:
         aud.close()
-    sibs = matching.build_siblings(results, asin, title)
+    _RESULTS_CACHE[asin] = (time.time(), results)
+    return results
+
+
+def series_siblings(item: dict[str, Any]) -> tuple[list, Optional[int]]:
+    """(sibling token-sets, requested book number) for this book's series, so the
+    matcher won't grab a different entry when the title collides on the series name."""
+    asin = item.get("source_id")
+    if not asin:
+        return [], None
+    results = _search_results(item)
+    sibs = matching.build_siblings(results, asin, item.get("title") or "")
     me = next((r for r in results if r.get("asin") == asin), None)
     number = matching.book_number(me.get("subtitle")) if me else None
-    _SIBLING_CACHE[asin] = (time.time(), (sibs, number))
     return sibs, number
+
+
+def book_editions(item: dict[str, Any]) -> list[dict[str, Any]]:
+    """Alternate editions (different narrator/year) of the requested book."""
+    asin = item.get("source_id")
+    if not asin:
+        return []
+    return matching.build_editions(_search_results(item), asin, item.get("title") or "")
 
 
 def manual_search(title: str, author: str = "",
@@ -329,6 +345,43 @@ def _probe(path: str) -> tuple[float, Optional[str]]:
         return 0.0, None
 
 
+def _file_edition(path: str) -> tuple[str, str]:
+    """The narrator (composer tag) and year the downloaded file claims for itself."""
+    try:
+        ad = tagging._adapter(path)
+        if ad is None:
+            return "", ""
+        return ad.get("composer") or "", ad.get("year") or ""
+    except Exception:
+        return "", ""
+
+
+def _resolve_edition(item: dict[str, Any], target_meta: dict[str, Any],
+                     files: list[str]) -> tuple[dict[str, Any], Optional[str]]:
+    """Work out which edition was actually downloaded. If the file's own narrator/year
+    point to a different (alternate) edition of the same book, fetch and return that
+    edition's metadata instead, plus a note for the history. Else return the target."""
+    if not (item.get("source_id") and files):
+        return target_meta, None
+    file_narr, file_year = _file_edition(files[0])
+    if not (file_narr or file_year):
+        return target_meta, None
+    target = {"narrators": target_meta.get("narrators") or [], "year": target_meta.get("year")}
+    alt = matching.pick_edition(file_narr, file_year, target, book_editions(item))
+    if not alt or not alt.get("asin"):
+        return target_meta, None
+    aud = Audnexus(settings.get("audible_region") or "us")
+    try:
+        alt_meta = audnexus.to_meta(aud.book(alt["asin"]))
+    finally:
+        aud.close()
+    if not alt_meta:
+        return target_meta, None
+    narr = ", ".join(alt_meta.get("narrators") or []) or file_narr
+    note = "Alternate edition: read by " + narr + (f" ({alt_meta['year']})" if alt_meta.get("year") else "")
+    return alt_meta, note
+
+
 def _detect_music(paths: list[str]) -> Optional[str]:
     """Inspect the downloaded audio and return a reason string if it looks like
     music rather than an audiobook (else None). Deliberately conservative so it
@@ -376,7 +429,7 @@ def _reject_mismatch(item: dict[str, Any], reason: str,
     if imported_dest:
         _remove_import_dir(imported_dest)
     db.update_item(item["id"], status="pending", chosen_files=None, slskd_username=None,
-                   slskd_dir=None, dest_path=None, size=0, attempts=0, error=reason)
+                   slskd_dir=None, dest_path=None, size=0, attempts=0, error=reason, note=None)
     who = f" (reported by {by})" if by else ""
     db.log_event(f"'{item['title']}' rejected as a mismatch{who}: {reason}. "
                  f"Blocklisted '{directory}' from {user or 'unknown'} and re-queued.", "warn", item["id"])
@@ -447,12 +500,27 @@ def _write_metadata(item: dict[str, Any], dest: str, files: list[str]) -> None:
                     "authors": [item["author"]] if item.get("author") else [],
                     "narrators": [item["narrator"]] if item.get("narrator") else [],
                     "asin": asin}
-        if settings.get_bool("embed_cover") and meta.get("cover_url"):
-            cover_bytes = aud.fetch_bytes(meta["cover_url"])
     finally:
         aud.close()
 
-    _edition_warning(item, meta)                  # flag an obvious edition/language mismatch
+    # If the download's own tags say it's a different edition of this book, tag it as
+    # what it actually is (not the requested edition) and flag it in the history.
+    note = None
+    if asin and meta.get("asin"):
+        meta, note = _resolve_edition(item, meta, files)
+    db.update_item(item["id"], note=note)         # set or clear the edition note
+    if note:
+        db.log_event(f"'{item['title']}': {note} — tagged as the edition actually downloaded.",
+                     "warn", item["id"])
+
+    if settings.get_bool("embed_cover") and meta.get("cover_url"):
+        ac = Audnexus(settings.get("audible_region") or "us")
+        try:
+            cover_bytes = ac.fetch_bytes(meta["cover_url"])
+        finally:
+            ac.close()
+
+    _edition_warning(item, meta)                  # flag an obvious language/edition mismatch
     cover_url = meta.get("cover_url") or item.get("cover")
     overwrite = settings.get_bool("overwrite_tags")
     embed = settings.get_bool("embed_cover")

@@ -105,6 +105,63 @@ def avg_bitrate(files: list[dict[str, Any]]) -> float:
     return sum(brs) / len(brs) if brs else 0.0
 
 
+def build_editions(results: list[dict[str, Any]], asin: str, title: str) -> list[dict[str, Any]]:
+    """Other Audible listings that are the SAME book as `asin` (same title + series
+    position) but a different edition — i.e. a different narrator/year/ASIN. Used to
+    recognise which edition a download actually is."""
+    me = next((r for r in results if r.get("asin") == asin), None)
+    if not me:
+        return []
+    my_title = norm(me.get("title") or title)
+    my_num = book_number(me.get("subtitle"))
+    alts = []
+    for r in results:
+        if r.get("asin") == asin or not r.get("asin"):
+            continue
+        if norm(r.get("title") or "") == my_title and book_number(r.get("subtitle")) == my_num:
+            alts.append({"asin": r["asin"], "narrators": r.get("narrators") or [],
+                         "year": str(r.get("year") or "") or None, "title": r.get("title")})
+    return alts
+
+
+def surname(name: str) -> str:
+    parts = norm(name or "").split()
+    return parts[-1] if parts else ""
+
+
+def year4(s: str) -> str:
+    m = re.search(r"\d{4}", str(s or ""))
+    return m.group(0) if m else ""
+
+
+def pick_edition(file_narr: str, file_year: str, target: dict[str, Any],
+                 alternates: list[dict[str, Any]]) -> Optional[dict[str, Any]]:
+    """Given the downloaded file's own narrator/year tags, return the alternate
+    edition it actually is — or None to keep the requested (target) edition.
+    Conservative: only switches on a confident narrator match (or a unique year)."""
+    fn, fy = surname(file_narr), year4(file_year)
+    if not fn and not fy:
+        return None
+
+    def nmatch(ed):
+        return bool(fn) and any(fn == surname(n) for n in ed.get("narrators") or [])
+
+    def ymatch(ed):
+        return bool(fy) and year4(ed.get("year") or "") == fy
+
+    if (fn and nmatch(target)) or (not fn and ymatch(target)):
+        return None                                  # the file matches what we asked for
+    if fn:                                            # narrator differs from target — find its edition
+        for ed in alternates:
+            if nmatch(ed):
+                return ed
+    if fy and not ymatch(target):                     # no narrator signal: fall back to a unique year
+        yalts = [ed for ed in alternates if ymatch(ed)]
+        if len(yalts) == 1:
+            return yalts[0]
+    return None
+
+
 def ext_of(path: str) -> str:
     m = re.search(r"(\.[a-z0-9]+)$", path.lower())
     return m.group(1) if m else ""

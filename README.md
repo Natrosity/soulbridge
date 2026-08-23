@@ -61,8 +61,10 @@ of them, and nothing tied a proper request workflow to it.
   upload is blocklisted and a different copy is tried.
 - **Self-organising:** files into `{author}/{title}` (configurable). No Readarr required.
 - **Audible tagging:** rewrites tags and cover art from the Audible listing (via
-  [Audnexus](https://audnex.us)), filling gaps and only replacing existing tags when the new value
-  is genuinely better.
+  [Audnexus](https://audnex.us)) and tidies up messy title/album/narrator/genre/year/description
+  tags. If a download's own tags reveal it's actually a *different edition* of the book (another
+  narrator or year), it's tagged as the edition it really is and marked **"Alternate edition"** in
+  your history, rather than mislabelled as the one you asked for.
 - **Targeted media-server scans:** Plex scans just the new folder, not the whole library; Jellyfin
   and Audiobookshelf too, with live connection indicators for each.
 
