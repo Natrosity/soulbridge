@@ -23,16 +23,6 @@ of them, and nothing tied a proper request workflow to it.
 
 ## How it works
 
-```
-  Discover (Audible)                          slskd (Soulseek)
-  or AudioBookRequest ─►  Soulbridge  ─►         │  download
-   (the request)        search · rank            ▼
-                        · tag · organise   move into /Author/Title/
-                                                  │
-                                                  ▼
-                                    Plex · Jellyfin · Audiobookshelf
-```
-
 1. A user searches Audible from the **Request** page (or a request arrives from AudioBookRequest).
 2. Depending on their role the request is auto-fulfilled or held for admin approval.
 3. Soulbridge builds a clean Soulseek query, ranks the responses (format, size, free slot,
