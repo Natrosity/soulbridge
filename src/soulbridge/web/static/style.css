@@ -229,6 +229,19 @@ main.wide { max-width: min(1240px, 95vw); }
 .daction .reqform { display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
 a.btn { display: inline-block; text-decoration: none; }
 
+/* 'Working…' state for controls that kick off a slow op (e.g. a Soulseek search) */
+@keyframes sb-spin { to { transform: rotate(360deg); } }
+.btn.working, a.btn.working {
+  background: var(--busy); border-color: var(--busy); color: #fff;
+  cursor: default; pointer-events: none; text-decoration: none;
+}
+.btn.working:hover { text-decoration: none; }
+.btn .spin {
+  display: inline-block; width: 12px; height: 12px; margin-right: 7px;
+  border: 2px solid rgba(255, 255, 255, 0.45); border-top-color: #fff;
+  border-radius: 50%; vertical-align: -2px; animation: sb-spin 0.7s linear infinite;
+}
+
 /* bottom toolbar (status indicators live here now) */
 body { padding-bottom: 46px; }
 .bottombar {

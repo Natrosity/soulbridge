@@ -14,7 +14,7 @@
     <div class="daction">
       <form method="post" action="/request/{{ item.id }}/auto">
         <input type="hidden" name="csrf" value="{{ csrf }}">
-        <button class="btn ghost sm" type="submit">Grab best automatically</button>
+        <button class="btn ghost sm" type="submit" data-busy="Queuing…">Grab best automatically</button>
       </form>
     </div>
   </div>
@@ -42,7 +42,7 @@
             <input type="hidden" name="csrf" value="{{ csrf }}">
             <input type="hidden" name="token" value="{{ token }}">
             <input type="hidden" name="index" value="{{ loop.index0 }}">
-            <button class="btn primary sm" type="submit">Grab</button>
+            <button class="btn primary sm" type="submit" data-busy="Grabbing…">Grab</button>
           </form>
         </td>
       </tr>

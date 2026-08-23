@@ -40,6 +40,30 @@
   if (document.getElementById("sb-slskd")) setInterval(pollStatus, 5000);
   if (document.getElementById("dash")) setInterval(refreshDash, 5000);
 
+  // --- 'Working…' feedback on controls that kick off a slow op ---
+  // Every POST here redirects, so the busy state clears when the next page paints.
+  function busify(el, label) {
+    if (!el || el.classList.contains("working")) return;
+    el.classList.add("working");                 // pointer-events:none blocks re-clicks
+    el.innerHTML = '<span class="spin" aria-hidden="true"></span>' + (label || "Working");
+  }
+  document.addEventListener("submit", function (e) {
+    var btn = e.submitter;
+    if (!btn && document.activeElement && document.activeElement.form === e.target) {
+      btn = document.activeElement;              // fallback for browsers without e.submitter
+    }
+    if (btn && btn.tagName === "BUTTON" && (btn.type === "submit" || !btn.type) &&
+        btn.classList.contains("btn")) {
+      // Defer: a disabled/changed submitter must still contribute its name/value to
+      // the POST (that's how the auto-vs-interactive mode is chosen), so swap after send.
+      setTimeout(function () { busify(btn, btn.getAttribute("data-busy")); }, 0);
+    }
+  }, true);
+  document.addEventListener("click", function (e) {
+    var a = e.target.closest ? e.target.closest("a.js-busy") : null;
+    if (a) busify(a, a.getAttribute("data-busy"));  // navigation proceeds normally
+  });
+
   // --- server settings: dirty-glow save button + side-nav scrollspy ---
   var form = document.getElementById("settingsform");
   if (form) {

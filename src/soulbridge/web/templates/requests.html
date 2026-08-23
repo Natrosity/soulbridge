@@ -18,7 +18,7 @@
     </div>
     <div class="daction">
       {% if it.status == 'selecting' %}
-        <a class="btn primary sm" href="/request/{{ it.id }}/candidates">Choose&nbsp;source…</a>
+        <a class="btn primary sm js-busy" data-busy="Searching…" href="/request/{{ it.id }}/candidates">Choose&nbsp;source…</a>
       {% else %}
         <span class="badge {{ badges.get(it.status, 'muted') }}">{{ status_labels.get(it.status, it.status) }}</span>
       {% endif %}
