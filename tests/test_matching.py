@@ -153,6 +153,32 @@ def test_rejects_wrong_series_entry():
     assert best and best.username == "u"
 
 
+def test_book_number_lifts_correct_series_entry():
+    # requested Book 1; a file that names "Book 1" beats a sibling that doesn't,
+    # even when the sibling check can't reject it (no number on its own listing).
+    ed = {"book_number": 1}
+    fe = _resp("fe", True, [_f(r"Brandon Sanderson\The Final Empire - Mistborn Book 1.m4b", 673_000_000)])
+    other = _resp("other", True, [_f(r"Brandon Sanderson\Shadows of Self - A Mistborn Novel.m4b", 345_000_000)])
+    best = m.pick_best([other, fe], "Mistborn", "Brandon Sanderson", PREFS, edition=ed)
+    assert best and best.username == "fe"
+
+
+def test_bitrate_breaks_ties():
+    # two otherwise-identical rips: the higher-bitrate one wins
+    lo = _resp("lo", True, [{"filename": r"x\Audiobooks\Dark Matter - Blake Crouch.m4b", "size": 300_000_000, "bitRate": 64}])
+    hi = _resp("hi", True, [{"filename": r"y\Audiobooks\Dark Matter - Blake Crouch.m4b", "size": 300_000_000, "bitRate": 256}])
+    best = m.pick_best([lo, hi], "Dark Matter", "Blake Crouch", PREFS)
+    assert best and best.username == "hi"
+
+
+def test_bitrate_does_not_override_real_signal():
+    # a lower-bitrate rip that names the requested narrator still beats a higher-bitrate one
+    narr = _resp("narr", True, [{"filename": r"x\Audiobooks\Dark Matter - Blake Crouch read by Jon Doe.m4b", "size": 300_000_000, "bitRate": 64}])
+    plain = _resp("plain", True, [{"filename": r"y\Audiobooks\Dark Matter - Blake Crouch.m4b", "size": 300_000_000, "bitRate": 320}])
+    best = m.pick_best([narr, plain], "Dark Matter", "Blake Crouch", PREFS, edition={"narrator": "Jon Doe"})
+    assert best and best.username == "narr"
+
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for fn in fns:

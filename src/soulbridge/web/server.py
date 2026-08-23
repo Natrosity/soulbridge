@@ -801,8 +801,9 @@ def request_candidates(request: Request, item_id: int):
     item = _owned_item(request, item_id)
     if not auth.is_trusted(request.state.user):
         raise HTTPException(403, "Interactive requests require a trusted account")
-    edition = {"narrator": item.get("narrator"), "year": (item.get("release_date") or "")[:4]}
-    siblings = worker.series_siblings(item)
+    siblings, booknum = worker.series_siblings(item)
+    edition = {"narrator": item.get("narrator"), "year": (item.get("release_date") or "")[:4],
+               "book_number": booknum}
     results = worker.manual_search(item["title"], item.get("author") or "", edition, siblings)
     token = uuid.uuid4().hex
     _SEARCH_CACHE[token] = {"ts": time.time(), "item": item_id, "results": results}

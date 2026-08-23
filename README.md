@@ -48,7 +48,8 @@ of them, and nothing tied a proper request workflow to it.
 
 - **Smart Soulseek matching:** title-first queries, summary/sample filtering, format and size
   preferences, a bias toward single-file M4Bs, and free-slot awareness. Generic one-word titles
-  require the author to match so "Fire" doesn't pull a music track.
+  require the author to match so "Fire" doesn't pull a music track. When several candidates are
+  otherwise equal, the higher-bitrate rip wins.
 - **Edition & series awareness:** ranking favours the requested narrator and release year, and
   avoids grabbing a dramatised/full-cast upload when a standard edition was requested (and vice
   versa). For books in a series it recognises the sibling entries, so requesting "Mistborn" (Book 1)

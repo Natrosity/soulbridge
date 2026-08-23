@@ -25,7 +25,7 @@
   {% if results %}
   <table class="results">
     <thead><tr>
-      <th>Match</th><th>User</th><th>Files</th><th>Format</th><th>Size</th><th>Slot</th><th>Score</th><th></th>
+      <th>Match</th><th>User</th><th>Files</th><th>Format</th><th>Size</th><th>Kbps</th><th>Slot</th><th>Score</th><th></th>
     </tr></thead>
     <tbody>
     {% for r in results %}
@@ -35,6 +35,7 @@
         <td>{{ r.files }}</td>
         <td>{{ r.exts | join(', ') }}</td>
         <td>{{ r.size_mb }} MB</td>
+        <td class="score">{{ r.bitrate or '—' }}</td>
         <td>{{ '✓' if r.free_slot else '—' }}</td>
         <td class="score">{{ r.score }}</td>
         <td>

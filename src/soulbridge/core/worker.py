@@ -74,13 +74,13 @@ def _find_local(basename: str, root: str) -> Optional[str]:
 _SIBLING_CACHE: dict[str, tuple[float, list]] = {}      # asin -> (ts, [frozenset,...])
 
 
-def series_siblings(item: dict[str, Any]) -> list:
-    """Distinctive token-sets of the OTHER books in this book's series, so the matcher
-    won't grab the wrong entry when the title collides on the series name (Mistborn).
-    Cached per ASIN for a day; empty when the book isn't part of a numbered series."""
+def series_siblings(item: dict[str, Any]) -> tuple[list, Optional[int]]:
+    """(sibling token-sets, requested book number) for this book's series, so the
+    matcher won't grab a different entry when the title collides on the series name
+    (Mistborn). Cached per ASIN for a day; empty when it isn't a numbered series."""
     asin = item.get("source_id")
     if item.get("source") not in ("abr", "user") or not asin:
-        return []
+        return [], None
     cached = _SIBLING_CACHE.get(asin)
     if cached and time.time() - cached[0] < 86400:
         return cached[1]
@@ -93,8 +93,10 @@ def series_siblings(item: dict[str, Any]) -> list:
     finally:
         aud.close()
     sibs = matching.build_siblings(results, asin, title)
-    _SIBLING_CACHE[asin] = (time.time(), sibs)
-    return sibs
+    me = next((r for r in results if r.get("asin") == asin), None)
+    number = matching.book_number(me.get("subtitle")) if me else None
+    _SIBLING_CACHE[asin] = (time.time(), (sibs, number))
+    return sibs, number
 
 
 def manual_search(title: str, author: str = "",
@@ -122,6 +124,7 @@ def manual_search(title: str, author: str = "",
                 "username": g.username, "directory": g.directory, "label": g.label,
                 "free_slot": g.free_slot, "size_mb": round(g.total_size / 1_048_576),
                 "files": len(g.files), "exts": sorted(e[1:] for e in g.exts),
+                "bitrate": round(matching.avg_bitrate(g.files)) or None,
                 "score": round(g.score, 1), "acceptable": g.score > 0,
                 "file_list": g.files,
             }
@@ -188,10 +191,11 @@ def process_item(item_id: int) -> None:
         db.update_item(item_id, status="searching", attempts=attempts, error=None)
 
         prefs = matching.default_prefs(settings)
+        siblings, booknum = series_siblings(item)
         edition = {"narrator": item.get("narrator"),
-                   "year": (item.get("release_date") or "")[:4]}
+                   "year": (item.get("release_date") or "")[:4],
+                   "book_number": booknum}
         blocked = db.blocked_pairs()
-        siblings = series_siblings(item)
         best = None
         for q in matching.build_queries(title, author):
             best = matching.pick_best(sk.search(q), title, author, prefs, edition, blocked, siblings)

@@ -133,6 +133,11 @@ and audited, because the app becomes internet-facing.
 - 2026-08-23: Phase 6 complete (v0.10.0) — Apprise notifications (request/complete/
   failure + test button; new `apprise` dep → image rebuild), ABR history import,
   cutover-ready. All six phases shipped; ABR retirement is now an operator choice.
+- 2026-08-24: Bitrate tiebreaker + series book-number signal (v0.13.2) — among otherwise-equal
+  candidates the higher-bitrate rip now wins (bounded +0–3.2, a pure tiebreaker; bitrate shown in
+  the picker). Plus a book-number signal: a candidate that names the requested series position gets
+  a boost and a different number a penalty, so requesting Mistborn (Book 1) now ranks the Final
+  Empire copies clearly above the un-numbered Era-2 books that the sibling check can't reject.
 - 2026-08-24: Series disambiguation (v0.13.1) — a book whose title collides on the series name
   (e.g. "Mistborn" = Book 1) no longer grabs a different entry ("The Alloy of Law", Book 4) that
   shares the series name, narrator, and year. Fetches the series' sibling books from Audible

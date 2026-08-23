@@ -99,6 +99,12 @@ def build_siblings(results: list[dict[str, Any]], asin: str, title: str) -> list
     return sibs
 
 
+def avg_bitrate(files: list[dict[str, Any]]) -> float:
+    """Mean bitrate (kbps) across a group's files, 0 when unknown."""
+    brs = [f.get("bitRate") for f in files if f.get("bitRate")]
+    return sum(brs) / len(brs) if brs else 0.0
+
+
 def ext_of(path: str) -> str:
     m = re.search(r"(\.[a-z0-9]+)$", path.lower())
     return m.group(1) if m else ""
@@ -223,6 +229,10 @@ def score_group(g: Group, title: str, author: str, prefs: dict[str, Any],
         score -= 15
     # mild preference for fewer files (cleaner) among multi-file sets
     score -= min(len(g.files), 40) * 0.1
+    # tiebreaker: when everything else is close, prefer the higher-bitrate rip.
+    # Capped at +3.2 so it only settles near-ties, never overriding a real signal
+    # (a format/narrator/edition/free-slot difference is worth far more).
+    score += min(avg_bitrate(g.files), 320) / 100.0
 
     # --- edition affinity: nudge toward the specific edition that was requested ---
     ed = edition or {}
@@ -240,6 +250,16 @@ def score_group(g: Group, title: str, author: str, prefs: dict[str, Any],
         score -= 25                                  # a full-cast upload but a standard was requested
     elif req_drama and not cand_drama:
         score -= 12                                  # requested a full-cast edition; this looks standard
+    # series position: prefer a file that names the requested book number, and
+    # push down one that names a different number (e.g. "Book 5").
+    bn = ed.get("book_number")
+    if bn:
+        if re.search(rf"\bbook\s+0*{bn}\b", text):
+            score += 12
+        else:
+            other = re.search(r"\bbook\s+0*(\d{1,3})\b", text)
+            if other and int(other.group(1)) != bn:
+                score -= 15
     return score
 
 
