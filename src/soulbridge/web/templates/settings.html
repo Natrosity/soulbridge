@@ -18,6 +18,9 @@
     {% for group, fields in grouped.items() %}
     <fieldset id="g-{{ group | lower | replace(' ','-') }}">
       <legend>{{ group }}</legend>
+      {% if group == 'Notifications' and ntest_banner %}
+        <div class="banner {{ ntest_banner.level }}">{{ ntest_banner.msg }}</div>
+      {% endif %}
       {% for row in fields %}
         {% set f = row.field %}
         <div class="field">
@@ -35,6 +38,8 @@
                      placeholder="{{ '•••••••• configured — leave blank to keep' if row.is_set else 'not set' }}">
             {% elif f.type == 'number' %}
               <input type="number" id="{{ f.key }}" name="{{ f.key }}" value="{{ row.value }}">
+            {% elif f.type == 'textarea' %}
+              <textarea id="{{ f.key }}" name="{{ f.key }}" rows="3">{{ row.value }}</textarea>
             {% else %}
               <input type="text" id="{{ f.key }}" name="{{ f.key }}" value="{{ row.value }}">
             {% endif %}
@@ -42,10 +47,22 @@
           </div>
         </div>
       {% endfor %}
+      {% if group == 'Notifications' %}
+      <div class="field">
+        <label></label>
+        <div class="control">
+          <button class="btn sm" type="submit" form="notifytestform" data-busy="Sending…">Send test notification</button>
+          <small>Save first if you just changed the URLs, then send a test.</small>
+        </div>
+      </div>
+      {% endif %}
     </fieldset>
     {% endfor %}
   </form>
 </div>
+<form id="notifytestform" method="post" action="/notify/test" hidden>
+  <input type="hidden" name="csrf" value="{{ csrf }}">
+</form>
 
 <div class="savefloat">
   <button form="settingsform" type="submit" id="savebtn" class="btn savebtn">Save settings</button>

@@ -90,12 +90,17 @@ and audited, because the app becomes internet-facing.
 - Enabled by `plex_login_enabled` (needs Plex URL + token). `public_url` sets the
   external base for the OAuth redirect (falls back to the request host).
 
-## Phase 6 — Parity polish & cutover
+## Phase 6 — Parity polish & cutover  *(done — v0.10.0)*
 
-- Notifications (Apprise) on request/approval/completion.
-- Request status visible to the requester.
-- Optional: import existing ABR request history.
-- Retire ABR once satisfied.
+- Notifications (Apprise) on request / completion / failure, with per-event toggles
+  and a "Send test notification" button. Best-effort, fire-and-forget on a daemon
+  thread so a notifier hiccup never breaks the pipeline (`clients/notify.py`).
+- Request status visible to the requester (My Requests) — from Phase 2/4.
+- Import existing ABR request history (admin button on `/requests/all`): past
+  fulfilments become library records, outstanding ones queue — dedup via upsert.
+- Retire ABR: an operational step for the operator (clear the ABR URL/key once
+  Soulbridge's own `/discover` + requests are the front door). Soulbridge is
+  self-sufficient without ABR.
 
 ---
 
@@ -125,6 +130,7 @@ and audited, because the app becomes internet-facing.
   plex_id at default_role, login button behind `plex_login_enabled`, `public_url`
   for the redirect). Verified live (PIN round-trip + provisioning); real OAuth
   round-trip needs a human, so give it a real sign-in before cutover.
-- **NEXT: Phase 6** (parity polish & cutover) — Apprise notifications on
-  request/approval/completion, requester-visible status, optional ABR history
-  import, then retire ABR.
+- 2026-08-23: Phase 6 complete (v0.10.0) — Apprise notifications (request/complete/
+  failure + test button; new `apprise` dep → image rebuild), ABR history import,
+  cutover-ready. All six phases shipped; ABR retirement is now an operator choice.
+- **NEXT: final audit** — functionality, polish, and security pass across the whole app.

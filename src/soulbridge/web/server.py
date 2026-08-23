@@ -24,7 +24,8 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.middleware.sessions import SessionMiddleware
 
 from .. import __version__, db, settings
-from ..clients import plextv
+from ..clients import notify, plextv
+from ..clients.abr import ABR
 from ..clients.abs import ABS
 from ..clients.audible import Audible
 from ..clients.plex import Plex
@@ -529,13 +530,79 @@ def item_deny(request: Request, item_id: int):
     return RedirectResponse("/requests/all", status_code=303)
 
 
+_IMPORT_MSGS = {
+    "none": ("warn", "AudioBookRequest isn't configured, so there's nothing to import."),
+    "error": ("err", "Import failed — check the AudioBookRequest connection."),
+    "0": ("ok", "Nothing new to import — Soulbridge is already up to date."),
+}
+
+
 @app.get("/requests/all", response_class=HTMLResponse)
-def all_requests(request: Request):
+def all_requests(request: Request, imported: str = ""):
     _require_admin(request)
     awaiting = db.list_items(statuses=["awaiting_approval"])
     others = [it for it in db.list_items(limit=300) if it["status"] != "awaiting_approval"]
+    banner = None
+    if imported:
+        level, msg = _IMPORT_MSGS.get(
+            imported, ("ok", f"Imported {imported} request(s) from AudioBookRequest."))
+        banner = {"level": level, "msg": msg}
     return templates.TemplateResponse(request, "all_requests.html", _ctx(
-        request, awaiting=awaiting, items=others))
+        request, awaiting=awaiting, items=others, banner=banner,
+        abr_configured=bool(settings.get("abr_url") and settings.get("abr_api_key"))))
+
+
+@app.post("/requests/import-abr", dependencies=[Depends(csrf_protect)])
+def import_abr(request: Request):
+    """One-off cutover aid: pull existing AudioBookRequest history into Soulbridge so
+    past requests survive after ABR is retired. New books only (upsert dedupes);
+    already-fulfilled ABR requests come in as 'done', the rest as 'pending'."""
+    _require_admin(request)
+    if not (settings.get("abr_url") and settings.get("abr_api_key")):
+        return RedirectResponse("/requests/all?imported=none", status_code=303)
+    abr = ABR(settings.get("abr_url"), settings.get("abr_api_key"))
+    imported = 0
+    try:
+        all_reqs = abr.list_requests(only_pending=False)
+        pending_asins = {(_abr_book(r).get("asin")) for r in abr.list_requests(only_pending=True)}
+        for r in all_reqs:
+            book = _abr_book(r)
+            asin = book.get("asin")
+            if not asin or db.get_item_by_source("abr", asin):
+                continue
+            authors = book.get("authors") or []
+            narrators = book.get("narrators") or []
+            reqrs = r.get("requests") or []
+            db.upsert_item(
+                "abr", asin, title=book.get("title", ""),
+                author=authors[0] if authors else "",
+                narrator=narrators[0] if narrators else "",
+                cover=book.get("cover_image"),
+                status="pending" if asin in pending_asins else "done",
+                requested_by=(reqrs[0].get("user_username") if reqrs else None),
+            )
+            imported += 1
+    except Exception as e:
+        db.log_event(f"ABR history import failed: {e}", "warn")
+        return RedirectResponse("/requests/all?imported=error", status_code=303)
+    finally:
+        abr.close()
+    if imported:
+        worker.wake()
+        db.log_event(f"Imported {imported} request(s) from AudioBookRequest history")
+    return RedirectResponse(f"/requests/all?imported={imported}", status_code=303)
+
+
+def _abr_book(r: dict[str, Any]) -> dict[str, Any]:
+    return r.get("book") or r
+
+
+@app.post("/notify/test", dependencies=[Depends(csrf_protect)])
+def notify_test(request: Request):
+    _require_admin(request)
+    ok, _msg = notify.test()
+    code = "ok" if ok else ("none" if not notify.urls() else "bad")
+    return RedirectResponse(f"/settings?ntest={code}", status_code=303)
 
 
 def _default_mode() -> str:
@@ -606,8 +673,11 @@ def do_request(request: Request, asin: str = Form(...), title: str = Form(...),
     if status == "pending":
         worker.wake()
         db.log_event(f"{user['username']} requested '{title}'", item_id=item_id)
+        notify.event("request", "New request", f"{user['username']} requested '{title}'")
     else:
         db.log_event(f"{user['username']} requested '{title}' (awaiting approval)", item_id=item_id)
+        notify.event("request", "New request — needs approval",
+                     f"{user['username']} requested '{title}' and it's awaiting your approval.")
     return RedirectResponse("/requests", status_code=303)
 
 
@@ -708,8 +778,15 @@ def library_cover(item_id: str):
 
 
 # -------------------------------------------------------------------- settings
+_NTEST_MSGS = {
+    "ok": ("ok", "Test notification sent."),
+    "none": ("warn", "No Apprise URLs configured yet."),
+    "bad": ("err", "Apprise rejected the URLs — check their format/credentials."),
+}
+
+
 @app.get("/settings", response_class=HTMLResponse)
-def settings_page(request: Request, saved: int = 0):
+def settings_page(request: Request, saved: int = 0, ntest: str = ""):
     grouped: dict[str, list[Any]] = {g: [] for g in settings.groups()}
     for f in settings.SPEC:
         secret = settings.is_secret(f.key)
@@ -718,8 +795,12 @@ def settings_page(request: Request, saved: int = 0):
             "value": "" if secret else settings.get(f.key),
             "is_set": bool(settings.get(f.key)) if secret else False,
         })
+    ntest_banner = None
+    if ntest in _NTEST_MSGS:
+        level, msg = _NTEST_MSGS[ntest]
+        ntest_banner = {"level": level, "msg": msg}
     return templates.TemplateResponse(request, "settings.html", _ctx(
-        request, grouped=grouped, saved=bool(saved),
+        request, grouped=grouped, saved=bool(saved), ntest_banner=ntest_banner,
     ))
 
 

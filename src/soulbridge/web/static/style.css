@@ -75,6 +75,8 @@ main { max-width: 1000px; margin: 22px auto; padding: 0 18px; }
 
 .banner { padding: 11px 16px; border-radius: var(--radius); margin-bottom: 18px; font-size: 14px; }
 .banner.err { background: #1f1414; border: 1px solid #4b2020; color: #f2a3a3; }
+.banner.ok { background: #101a12; border: 1px solid #1f4b28; color: #8fd6a0; }
+.banner.warn { background: #1b1710; border: 1px solid #4a3b1e; color: #e0be7a; }
 
 /* nav count badge (admin: requests awaiting approval) */
 .navcount { position: relative; display: inline-flex; align-items: center; gap: 6px; }
@@ -142,10 +144,12 @@ tr.rejected { opacity: 0.5; }
 .field { display: grid; grid-template-columns: 220px 1fr; gap: 14px; align-items: start; padding: 10px 0; border-top: 1px solid var(--line); }
 .field:first-of-type { border-top: none; }
 .field label { color: var(--text); font-weight: 500; padding-top: 7px; }
-.field .control input[type=text], .field .control input[type=password], .field .control input[type=number] {
+.field .control input[type=text], .field .control input[type=password], .field .control input[type=number],
+.field .control textarea {
   width: 100%; max-width: 460px; padding: 8px 11px; border-radius: 8px;
   background: var(--panel2); border: 1px solid var(--line); color: var(--text);
 }
+.field .control textarea { font: inherit; resize: vertical; min-height: 60px; }
 .field small { display: block; color: var(--muted); font-size: 12px; margin-top: 5px; }
 .formactions { margin-top: 8px; }
 .saved { background: #12331b; border: 1px solid #1f4b28; color: var(--ok); padding: 9px 12px; border-radius: 8px; margin-bottom: 14px; }

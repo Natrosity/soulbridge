@@ -12,7 +12,7 @@ import time
 from typing import Any, Optional
 
 from .. import db, settings
-from ..clients import audnexus
+from ..clients import audnexus, notify
 from ..clients.abr import ABR
 from ..clients.abs import ABS
 from ..clients.audnexus import Audnexus
@@ -126,6 +126,10 @@ def _park_or_retry(item_id: int, attempts: int, title: str, kind: str, err: str 
         db.update_item(item_id, status=status, error=err or None)
         db.log_event(f"Giving up on '{title}' after {attempts} attempts"
                      + (f": {err}" if err else ""), "warn", item_id)
+        notify.event("failure", "Request failed",
+                     f"Couldn't fulfil '{title}'"
+                     + (" — not found on Soulseek." if status == "no_results"
+                        else (f" — {err}" if err else ".")))
     else:
         db.update_item(item_id, status="pending", error=err or None)
         db.log_event(f"'{title}': no luck yet (attempt {attempts}/{MAX_ATTEMPTS}); will retry"
@@ -201,6 +205,8 @@ def _check_download(item: dict[str, Any], sk: Slskd) -> None:
     if any("Failed" in s or "Errored" in s or "Rejected" in s or "Cancelled" in s for s in vals):
         db.update_item(item["id"], status="failed", error="Soulseek transfer failed")
         db.log_event(f"Transfer failed for '{item['title']}'", "error", item["id"])
+        notify.event("failure", "Download failed",
+                     f"The Soulseek transfer for '{item['title']}' failed.")
         return
     if all("Completed" in s and "Succeeded" in s for s in states.values()):
         _import(item)
@@ -232,6 +238,10 @@ def _import(item: dict[str, Any]) -> None:
     db.update_item(item["id"], status="done", dest_path=dest, error=None)
     db.log_event(f"Imported '{item['title']}' → {dest} ({len(moved_paths)} file(s))",
                  item_id=item["id"])
+    author = item.get("author")
+    notify.event("complete", "Download complete",
+                 f"'{item['title']}'" + (f" by {author}" if author else "")
+                 + " is now in your library.")
     _post_import(item, dest)
 
 
@@ -338,6 +348,7 @@ def _discover_requests() -> None:
             authors = book.get("authors") or []
             narrators = book.get("narrators") or []
             reqrs = r.get("requests") or []
+            is_new = db.get_item_by_source("abr", asin) is None
             db.upsert_item(
                 "abr", asin, title=book.get("title", ""),
                 author=authors[0] if authors else "",
@@ -345,6 +356,12 @@ def _discover_requests() -> None:
                 cover=book.get("cover_image"), status="pending",
                 requested_by=(reqrs[0].get("user_username") if reqrs else None),
             )
+            if is_new:
+                who = reqrs[0].get("user_username") if reqrs else None
+                notify.event("request", "New request",
+                             f"'{book.get('title', '')}'"
+                             + (f" — requested by {who}" if who else "")
+                             + " (via AudioBookRequest)")
     except Exception as e:
         STATUS["abr_connected"] = False
         STATUS["last_error"] = f"ABR: {e}"

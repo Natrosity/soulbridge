@@ -83,6 +83,16 @@ SPEC: list[Field] = [
                "value contains everything the old one did; otherwise the existing tag is kept."),
     Field("audible_region", "Audible region", "us", "Metadata",
           help="us, uk, de, fr, au, ca, in, it, es, jp."),
+    # Notifications (Apprise)
+    Field("apprise_urls", "Apprise URLs", "", "Notifications", "textarea",
+          help="One per line (or comma-separated). Apprise fans out to Discord, Telegram, "
+               "ntfy, Pushover, email and many more — e.g. ntfy://ntfy.sh/mytopic or "
+               "tgram://bottoken/chatid. See the Apprise wiki for the URL formats."),
+    Field("notify_on_request", "Notify on new request", "true", "Notifications", "bool",
+          help="A book was requested (and, for standard users, is awaiting approval)."),
+    Field("notify_on_complete", "Notify on completed download", "true", "Notifications", "bool"),
+    Field("notify_on_failure", "Notify on failure", "true", "Notifications", "bool",
+          help="A request could not be found on Soulseek or a transfer failed."),
     # Access / users
     Field("default_role", "Default role for new users", "standard", "Access", "select",
           help="'standard' (requests need admin approval) or 'trusted' (auto-download).",
