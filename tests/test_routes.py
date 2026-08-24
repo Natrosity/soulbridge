@@ -193,6 +193,33 @@ def test_settings_save_whole_number_weight_stays_clean(app_ctx):
     assert settings.get("weight_coverage_floor") == "0.45"
 
 
+def test_search_page_renders_score_breakdown(app_ctx, monkeypatch):
+    from soulscribe.core import worker
+    fake = [
+        {"username": "good", "directory": "x", "label": "Dark Matter", "free_slot": True,
+         "size_mb": 320, "files": 1, "exts": ["m4b"], "bitrate": 256, "score": 118.5,
+         "acceptable": True, "file_list": [], "breakdown": [
+             {"label": "Title match (100%)", "points": 100.0},
+             {"label": "Preferred format", "points": 8.0},
+         ]},
+        {"username": "bad", "directory": "y", "label": "Dark Matter (Remix)", "free_slot": False,
+         "size_mb": 6, "files": 1, "exts": ["mp3"], "bitrate": None, "score": -1.0,
+         "acceptable": False, "file_list": [], "breakdown": [
+             {"label": "Rejected: looks like music, not an audiobook", "points": None},
+         ]},
+    ]
+    monkeypatch.setattr(worker, "manual_search", lambda *a, **k: fake)
+    u, p = _make_admin(app_ctx)
+    _login(app_ctx, u, p)
+    csrf = _csrf(app_ctx, "/search")
+    r = app_ctx.post("/search", data={"title": "Dark Matter", "author": "", "csrf": csrf})
+    assert r.status_code == 200
+    assert "Title match (100%)" in r.text
+    assert "+100.0" in r.text and "+8.0" in r.text
+    assert "Rejected: looks like music, not an audiobook" in r.text
+    assert '<details class="breakdown">' in r.text
+
+
 def test_settings_save_bad_number_is_ignored(app_ctx):
     u, p = _make_admin(app_ctx)
     _login(app_ctx, u, p)

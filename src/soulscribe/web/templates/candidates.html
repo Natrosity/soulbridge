@@ -37,7 +37,23 @@
         <td>{{ r.size_mb }} MB</td>
         <td class="score">{{ r.bitrate or '—' }}</td>
         <td>{{ '✓' if r.free_slot else '—' }}</td>
-        <td class="score">{{ r.score }}</td>
+        <td class="score">
+          {% if r.breakdown %}
+          <details class="breakdown">
+            <summary>{{ r.score }}</summary>
+            <ul class="breaklist">
+              {% for e in r.breakdown %}
+              <li class="{{ 'reject' if e.points is none else '' }}">
+                <span>{{ e.label }}</span>
+                {% if e.points is not none %}
+                <span class="pts {{ 'pos' if e.points > 0 else 'neg' }}">{{ '%+.1f' | format(e.points) }}</span>
+                {% endif %}
+              </li>
+              {% endfor %}
+            </ul>
+          </details>
+          {% else %}{{ r.score }}{% endif %}
+        </td>
         <td>
           <form method="post" action="/request/{{ item.id }}/pick">
             <input type="hidden" name="csrf" value="{{ csrf }}">
@@ -51,7 +67,8 @@
     </tbody>
   </table>
   <p class="hint">Grey rows scored below the acceptance threshold (wrong format, size, or weak
-    title match) — you can still grab them. Whatever you pick is tagged from Audible after import.</p>
+    title match) — you can still grab them. Click a score to see how it was worked out.
+    Whatever you pick is tagged from Audible after import.</p>
   {% else %}
     <p class="empty">No audio candidates found on Soulseek right now.
       <a href="/request/{{ item.id }}/candidates">Search again</a>, or grab automatically to keep retrying in the background.</p>
