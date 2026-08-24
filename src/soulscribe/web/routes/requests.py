@@ -42,7 +42,9 @@ def _quota_message(user: dict[str, Any]) -> Optional[str]:
 
 # ------------------------------------------------------------- discovery aids
 _LIB_INDEX = cache.TTLCache(300)                # "lib" -> (asins, keys), 5 min
+_LIB_SAMPLE = cache.TTLCache(300)                # "sample" -> recent library items, 5 min
 _BROWSE = cache.TTLCache(6 * 3600)              # Audible sort -> browse items, 6h
+_OWNED_HEROES = cache.TTLCache(6 * 3600)        # "series"|"authors"|"similar" -> a hero row, 6h
 # (row label, Audible sort, which releases to show: 'released' | 'upcoming')
 HERO_ROWS = (("Bestsellers", "BestSellers", "released"),
              ("Releasing Soon", "-ReleaseDate", "upcoming"))
@@ -61,6 +63,124 @@ def _library_index() -> tuple[set, set]:
     a.close()
     _LIB_INDEX.set("lib", (asins, keys))
     return asins, keys
+
+
+def _library_sample(limit: int = 40) -> list[dict[str, Any]]:
+    """A recent slice of the ABS library (title/author/series/asin per item) —
+    seeds the 'owned-library' discovery hero rows. Cached like the library index."""
+    url, key, lib = settings.get("abs_url"), settings.get("abs_api_key"), settings.get("abs_library_id")
+    if not (url and key and lib):
+        return []
+    hit = _LIB_SAMPLE.get("sample")
+    if hit is not None:
+        return hit
+    a = ABS(url, key)
+    items, _total = a.library_items(lib, limit=limit, sort="addedAt", desc=True)
+    a.close()
+    _LIB_SAMPLE.set("sample", items)
+    return items
+
+
+def _not_owned(candidates: list[dict[str, Any]], asins: set, keys: set,
+              seen_asins: set) -> list[dict[str, Any]]:
+    """Filter Audible listings down to ones not already owned (by ASIN or
+    title|author key) and not already picked by an earlier row in this batch."""
+    out = []
+    for b in candidates:
+        asin = b.get("asin")
+        if not asin or asin in asins or asin in seen_asins:
+            continue
+        k = library_key(b.get("title"), (b.get("authors") or [""])[0])
+        if k in keys:
+            continue
+        seen_asins.add(asin)
+        out.append(b)
+    return out
+
+
+def _series_completion_row(aud: Audible) -> dict[str, Any]:
+    """'Complete the series' — for a few series you own at least one book of,
+    find what you're missing via Audible's own series graph (InTheSameSeries)."""
+    by_series: dict[str, dict[str, Any]] = {}
+    for it in _library_sample():
+        s = (it.get("series") or "").strip()
+        if s and it.get("asin") and s not in by_series:
+            by_series[s] = it            # first hit = most recently added in that series
+    asins, keys = _library_index()
+    missing: list[dict[str, Any]] = []
+    seen: set = set()
+    for series_name, rep in list(by_series.items())[:3]:      # cap Audible calls
+        sibs = aud.similar(rep["asin"], "InTheSameSeries", num=12)
+        for b in sibs:
+            b["series"] = b.get("series") or series_name
+        missing += _not_owned(sibs, asins, keys, seen)
+        if len(missing) >= 18:
+            break
+    if not missing:
+        return {}
+    _mark_results(missing)
+    return {"label": "Complete the series", "books": missing[:18]}
+
+
+def _author_hero_row(aud: Audible) -> dict[str, Any]:
+    """'More from authors you own' — search Audible for a few authors already
+    in your library, skipping what you already own or have requested."""
+    authors: list[str] = []
+    seen_authors: set = set()
+    for it in _library_sample():
+        a = (it.get("author") or "").strip()
+        if a and a.lower() not in seen_authors:
+            seen_authors.add(a.lower())
+            authors.append(a)
+        if len(authors) >= 3:
+            break
+    asins, keys = _library_index()
+    picks: list[dict[str, Any]] = []
+    seen: set = set()
+    for author in authors:
+        picks += _not_owned(aud.search(author, num=10), asins, keys, seen)
+        if len(picks) >= 18:
+            break
+    if not picks:
+        return {}
+    _mark_results(picks)
+    return {"label": "More from authors you own", "books": picks[:18]}
+
+
+def _similar_hero_row(aud: Audible) -> dict[str, Any]:
+    """'Because you have X' — Audible's raw-similarity graph seeded from one
+    recently-added library book."""
+    rep = next((it for it in _library_sample() if it.get("asin")), None)
+    if not rep:
+        return {}
+    asins, keys = _library_index()
+    picks = _not_owned(aud.similar(rep["asin"], "RawSimilarities", num=12), asins, keys, set())
+    if not picks:
+        return {}
+    _mark_results(picks)
+    return {"label": f"Because you have {rep['title']}", "books": picks[:18]}
+
+
+def _owned_hero_rows() -> list[dict[str, Any]]:
+    """Hero rows derived from the ABS library: series completion, more from
+    known authors, and Audible's similarity graph. Cached 6h like the generic
+    Bestsellers/Releasing Soon rows; an empty result is cached too, so a
+    library with nothing to surface doesn't re-query Audible every page load."""
+    url, key, lib = settings.get("abs_url"), settings.get("abs_api_key"), settings.get("abs_library_id")
+    if not (url and key and lib):
+        return []
+    builders = (("series", _series_completion_row), ("authors", _author_hero_row),
+               ("similar", _similar_hero_row))
+    to_build = [(k, fn) for k, fn in builders if _OWNED_HEROES.get(k) is None]
+    if to_build:
+        region = settings.get("audible_region") or "us"
+        aud = Audible(region)
+        try:
+            for k, fn in to_build:
+                _OWNED_HEROES.set(k, fn(aud))
+        finally:
+            aud.close()
+    return [row for k, _ in builders if (row := _OWNED_HEROES.get(k))]
 
 
 def _mark_results(results: list[dict[str, Any]]) -> None:
@@ -83,12 +203,13 @@ def _mark_results(results: list[dict[str, Any]]) -> None:
 
 
 def _hero_rows() -> list[dict[str, Any]]:
-    """Curated Audible browse rows for the discovery page (cached 6h; status marks
-    refreshed per request). Bestsellers shows only already-released titles;
-    'Releasing Soon' shows only not-yet-out titles."""
+    """Curated Audible rows for the discovery page (cached 6h; status marks
+    refreshed per request). Personalised rows from the ABS library come first
+    (series completion, familiar authors, similar titles), then the generic
+    Bestsellers (already-released titles) / Releasing Soon (not-yet-out) rows."""
+    rows: list[dict[str, Any]] = _owned_hero_rows()
     region = settings.get("audible_region") or "us"
     today = db.today()
-    rows: list[dict[str, Any]] = []
     for label, sort, which in HERO_ROWS:
         items = _BROWSE.get(sort)
         if items is None:
