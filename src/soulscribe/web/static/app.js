@@ -92,6 +92,26 @@
     form.addEventListener("input", recompute);
     form.addEventListener("change", recompute);
 
+    // matching weight presets: fill the number inputs, don't submit — user reviews then Saves
+    var presetsEl = document.getElementById("matching-presets");
+    if (presetsEl) {
+      var presets = {};
+      try { presets = JSON.parse(presetsEl.textContent); } catch (e) { presets = {}; }
+      document.querySelectorAll("[data-preset]").forEach(function (btn) {
+        btn.addEventListener("click", function () {
+          var preset = presets[btn.dataset.preset];
+          if (!preset) return;
+          form.querySelectorAll("[data-weight-key]").forEach(function (input) {
+            var key = input.dataset.weightKey;
+            if (key && Object.prototype.hasOwnProperty.call(preset.weights, key)) {
+              input.value = preset.weights[key];
+              input.dispatchEvent(new Event("input", { bubbles: true }));
+            }
+          });
+        });
+      });
+    }
+
     var links = Array.from(document.querySelectorAll(".settingsnav a"));
     var byId = {};
     links.forEach(function (a) { byId[a.dataset.target] = a; });

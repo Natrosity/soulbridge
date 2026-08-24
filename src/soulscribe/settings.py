@@ -4,9 +4,10 @@ environment variables of the form SOULSCRIBE_<KEY> seed them on first run
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, Optional
 
 from . import db
+from .core import matching
 from .env import env
 
 
@@ -19,6 +20,43 @@ class Field:
     type: str = "text"          # text | password | bool | number | textarea | select
     help: str = ""
     options: tuple = ()          # for type == "select"
+    min_val: Optional[float] = None    # number: clamp bound (also rendered as the input's min)
+    max_val: Optional[float] = None    # number: clamp bound (also rendered as the input's max)
+    step: Optional[float] = None       # number: input step (e.g. 0.05 for a fraction)
+    rows: int = 3                      # textarea: row count
+
+
+_KEYWORD_HELP = {
+    "spam": "Comma-separated. A candidate is rejected outright if any of these phrases "
+           "appear in its filenames (except 'abridged', which is a penalty below instead).",
+    "dramatized": "Comma-separated. Detects full-cast/dramatised editions so a standard "
+                  "request doesn't grab one, and vice versa.",
+    "music_dirs": "Comma-separated folder-name words that suggest a music path rather "
+                  "than an audiobook.",
+    "audiobook_markers": "Comma-separated words that suggest a source IS an audiobook "
+                         "(offsets the music-folder penalty).",
+}
+_KEYWORD_LABELS = {
+    "spam": "Reject markers (sample/summary/etc)",
+    "dramatized": "Dramatised / full-cast markers",
+    "music_dirs": "Music-folder markers",
+    "audiobook_markers": "Audiobook markers",
+}
+
+
+def _matching_fields() -> list[Field]:
+    """Server-Settings fields for every tunable weight + keyword list in
+    core/matching.py, defaulted to today's fixed values (see matching.DEFAULT_WEIGHTS
+    / DEFAULT_KEYWORDS) so behaviour is unchanged until an operator edits one."""
+    fields = []
+    for key, (label, help_text, lo, hi, step) in matching.WEIGHT_META.items():
+        fields.append(Field(f"weight_{key}", label, str(matching.DEFAULT_WEIGHTS[key]),
+                            "Matching", "number", help=help_text,
+                            min_val=lo, max_val=hi, step=step))
+    for key, default in matching.DEFAULT_KEYWORDS.items():
+        fields.append(Field(f"keyword_{key}", _KEYWORD_LABELS[key], ",".join(default),
+                            "Matching", "textarea", help=_KEYWORD_HELP[key], rows=3))
+    return fields
 
 
 SPEC: list[Field] = [
@@ -75,6 +113,8 @@ SPEC: list[Field] = [
           help="Reject tiny files (samples, single tracks, wrong matches). Full "
                "audiobooks are usually 50MB+."),
     Field("max_size_mb", "Maximum size (MB)", "4000", "Behaviour", "number"),
+    # Matching (scoring weights + keyword lists — see _matching_fields() above)
+    *_matching_fields(),
     # Metadata tagging (Audible via Audnexus)
     Field("write_metadata", "Tag files from Audible", "true", "Metadata", "bool",
           help="After download, write tags + cover from the Audible listing (Audnexus)."),
@@ -138,6 +178,13 @@ def get_bool(key: str) -> bool:
 def get_int(key: str, fallback: int = 0) -> int:
     try:
         return int(float(get(key)))
+    except (TypeError, ValueError):
+        return fallback
+
+
+def get_float(key: str, fallback: float = 0.0) -> float:
+    try:
+        return float(get(key))
     except (TypeError, ValueError):
         return fallback
 

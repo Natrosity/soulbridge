@@ -133,3 +133,72 @@ def test_settings_save_persists(app_ctx):
                  follow_redirects=False)
     from soulscribe import settings
     assert settings.get("instance_name") == "My Scribe"
+
+
+# --------------------------------------------------------- Phase 7: matching UI
+def test_settings_page_renders_matching_group_with_presets(app_ctx):
+    u, p = _make_admin(app_ctx)
+    _login(app_ctx, u, p)
+    r = app_ctx.get("/settings")
+    assert r.status_code == 200
+    assert "Matching" in r.text
+    assert 'id="weight_coverage_floor"' in r.text
+    assert 'id="keyword_spam"' in r.text
+    assert 'id="matching-presets"' in r.text
+    for name in ("balanced", "single_m4b", "bitrate", "lenient"):
+        assert f'data-preset="{name}"' in r.text
+    block = r.text[r.text.index('id="weight_coverage_floor"'):][:300]
+    assert 'min="0.2"' in block and 'max="0.9"' in block and 'step="0.05"' in block
+
+
+def test_settings_save_clamps_out_of_range_weight(app_ctx):
+    u, p = _make_admin(app_ctx)
+    _login(app_ctx, u, p)
+    from soulscribe import settings
+    csrf = _csrf(app_ctx, "/settings")
+    app_ctx.post("/settings", data={"weight_coverage_floor": "5.0", "instance_name": "T",
+                                    "csrf": csrf}, follow_redirects=False)
+    assert settings.get_float("weight_coverage_floor") == 0.9      # clamped to max_val
+
+    csrf2 = _csrf(app_ctx, "/settings")
+    app_ctx.post("/settings", data={"weight_coverage_floor": "-9", "instance_name": "T",
+                                    "csrf": csrf2}, follow_redirects=False)
+    assert settings.get_float("weight_coverage_floor") == 0.2      # clamped to min_val
+
+
+def test_settings_save_in_range_weight_passes_through(app_ctx):
+    u, p = _make_admin(app_ctx)
+    _login(app_ctx, u, p)
+    from soulscribe import settings
+    csrf = _csrf(app_ctx, "/settings")
+    app_ctx.post("/settings", data={"weight_coverage_floor": "0.5", "instance_name": "T",
+                                    "csrf": csrf}, follow_redirects=False)
+    assert settings.get_float("weight_coverage_floor") == 0.5
+
+
+def test_settings_save_whole_number_weight_stays_clean(app_ctx):
+    # clamping must not turn "25" into "25.0" — that value round-trips into the
+    # number input's value= attribute and is visible in the UI every save.
+    u, p = _make_admin(app_ctx)
+    _login(app_ctx, u, p)
+    from soulscribe import settings
+    csrf = _csrf(app_ctx, "/settings")
+    app_ctx.post("/settings", data={"weight_music_penalty": "25", "instance_name": "T",
+                                    "csrf": csrf}, follow_redirects=False)
+    assert settings.get("weight_music_penalty") == "25"
+    # a genuinely fractional value keeps its decimal
+    csrf2 = _csrf(app_ctx, "/settings")
+    app_ctx.post("/settings", data={"weight_coverage_floor": "0.45", "instance_name": "T",
+                                    "csrf": csrf2}, follow_redirects=False)
+    assert settings.get("weight_coverage_floor") == "0.45"
+
+
+def test_settings_save_bad_number_is_ignored(app_ctx):
+    u, p = _make_admin(app_ctx)
+    _login(app_ctx, u, p)
+    from soulscribe import settings
+    settings.db.set_setting("weight_coverage_floor", "0.55")
+    csrf = _csrf(app_ctx, "/settings")
+    app_ctx.post("/settings", data={"weight_coverage_floor": "not-a-number",
+                                    "instance_name": "T", "csrf": csrf}, follow_redirects=False)
+    assert settings.get_float("weight_coverage_floor") == 0.55     # untouched, not zeroed

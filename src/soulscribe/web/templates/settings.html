@@ -13,6 +13,7 @@
     </ul>
   </aside>
 
+  <script type="application/json" id="matching-presets">{{ matching_presets | tojson }}</script>
   <form method="post" action="/settings" class="settingsform" id="settingsform" autocomplete="off">
     <input type="hidden" name="csrf" value="{{ csrf }}">
     {% for group, fields in grouped.items() %}
@@ -20,6 +21,16 @@
       <legend>{{ group }}</legend>
       {% if group == 'Notifications' and ntest_banner %}
         <div class="banner {{ ntest_banner.level }}">{{ ntest_banner.msg }}</div>
+      {% endif %}
+      {% if group == 'Matching' %}
+        <div class="presetbar">
+          <span class="presetlabel">Presets:</span>
+          {% for name, preset in matching_presets.items() %}
+          <button type="button" class="btn sm ghost" data-preset="{{ name }}">{{ preset.label }}</button>
+          {% endfor %}
+        </div>
+        <p class="fieldnote">Presets fill in the fields below — review and Save when you're happy.
+          Score breakdowns for each candidate are shown on the interactive request picker.</p>
       {% endif %}
       {% for row in fields %}
         {% set f = row.field %}
@@ -37,9 +48,13 @@
                      autocomplete="new-password"
                      placeholder="{{ '•••••••• configured — leave blank to keep' if row.is_set else 'not set' }}">
             {% elif f.type == 'number' %}
-              <input type="number" id="{{ f.key }}" name="{{ f.key }}" value="{{ row.value }}">
+              <input type="number" id="{{ f.key }}" name="{{ f.key }}" value="{{ row.value }}"
+                     data-weight-key="{{ f.key[7:] if f.key.startswith('weight_') else '' }}"
+                     {% if f.step is not none %}step="{{ f.step }}"{% endif %}
+                     {% if f.min_val is not none %}min="{{ f.min_val }}"{% endif %}
+                     {% if f.max_val is not none %}max="{{ f.max_val }}"{% endif %}>
             {% elif f.type == 'textarea' %}
-              <textarea id="{{ f.key }}" name="{{ f.key }}" rows="3">{{ row.value }}</textarea>
+              <textarea id="{{ f.key }}" name="{{ f.key }}" rows="{{ f.rows }}">{{ row.value }}</textarea>
             {% else %}
               <input type="text" id="{{ f.key }}" name="{{ f.key }}" value="{{ row.value }}">
             {% endif %}
