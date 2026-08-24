@@ -59,6 +59,7 @@ CREATE TABLE IF NOT EXISTS items (
     release_date   TEXT,                           -- YYYY-MM-DD; if future, hold until then
     note           TEXT,                           -- e.g. 'Alternate edition: read by …'
     requested_by   TEXT,
+    follow_id      INTEGER,                        -- set if auto-created by a follow (see below)
     created_at     TEXT NOT NULL,
     updated_at     TEXT NOT NULL,
     UNIQUE(source, source_id)
@@ -101,6 +102,17 @@ CREATE TABLE IF NOT EXISTS blocklist (
     ts        TEXT NOT NULL,
     UNIQUE(username, directory)
 );
+CREATE TABLE IF NOT EXISTS follows (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    kind            TEXT NOT NULL,          -- 'author' | 'series'
+    name            TEXT NOT NULL,          -- display name
+    ref_asin        TEXT,                   -- a representative book ASIN (series only —
+                                             -- anchors the InTheSameSeries lookup)
+    created_by      TEXT NOT NULL,          -- username
+    created_at      TEXT NOT NULL,
+    last_checked_at TEXT,
+    UNIQUE(kind, name, created_by)
+);
 CREATE INDEX IF NOT EXISTS idx_items_status ON items(status);
 CREATE INDEX IF NOT EXISTS idx_events_ts ON events(ts);
 CREATE INDEX IF NOT EXISTS idx_tagwrites_ts ON tag_writes(id);
@@ -129,6 +141,19 @@ def today() -> str:
     return datetime.now(_tzinfo()).strftime("%Y-%m-%d")
 
 
+def hours_since(ts: Optional[str]) -> float:
+    """Hours elapsed since a timestamp string produced by now() — used to
+    throttle periodic checks (e.g. how often to re-poll a follow). A falsy or
+    unparseable value reads as infinity ("never"), so it's always due."""
+    if not ts:
+        return float("inf")
+    try:
+        then = datetime.strptime(ts, "%Y-%m-%dT%H:%M:%S").replace(tzinfo=_tzinfo())
+        return (datetime.now(_tzinfo()) - then).total_seconds() / 3600
+    except ValueError:
+        return float("inf")
+
+
 def _now() -> str:
     return now()
 
@@ -148,10 +173,30 @@ def _migration_1(c: sqlite3.Connection) -> None:
         c.execute("ALTER TABLE items ADD COLUMN note TEXT")
 
 
+def _migration_2(c: sqlite3.Connection) -> None:
+    """Phase 8: author/series follows, and the items.follow_id link recording
+    which follow (if any) auto-created a given request."""
+    c.executescript("""
+        CREATE TABLE IF NOT EXISTS follows (
+            id              INTEGER PRIMARY KEY AUTOINCREMENT,
+            kind            TEXT NOT NULL,
+            name            TEXT NOT NULL,
+            ref_asin        TEXT,
+            created_by      TEXT NOT NULL,
+            created_at      TEXT NOT NULL,
+            last_checked_at TEXT,
+            UNIQUE(kind, name, created_by)
+        );
+    """)
+    cols = {r["name"] for r in c.execute("PRAGMA table_info(items)")}
+    if "follow_id" not in cols:
+        c.execute("ALTER TABLE items ADD COLUMN follow_id INTEGER")
+
+
 # Ordered migrations. Each entry's 1-based position is the schema version it
 # brings the database to; append new ones, never renumber. Applied in order for
 # any DB whose PRAGMA user_version is below that position.
-MIGRATIONS = [_migration_1]
+MIGRATIONS = [_migration_1, _migration_2]
 
 
 def init() -> None:
@@ -365,6 +410,53 @@ def list_blocks(limit: int = 200) -> list[dict[str, Any]]:
 def remove_block(block_id: int) -> None:
     with connect() as c:
         c.execute("DELETE FROM blocklist WHERE id=?", (block_id,))
+
+
+# ---- follows (author/series -> auto-request new releases) ----
+def create_follow(kind: str, name: str, created_by: str,
+                  ref_asin: Optional[str] = None) -> int:
+    """Insert a follow, or return the existing id if this user already follows
+    this (kind, name) — following twice is a no-op, not an error."""
+    with connect() as c:
+        row = c.execute(
+            "SELECT id FROM follows WHERE kind=? AND name=? AND created_by=?",
+            (kind, name, created_by),
+        ).fetchone()
+        if row:
+            return row["id"]
+        cur = c.execute(
+            "INSERT INTO follows(kind,name,ref_asin,created_by,created_at) VALUES(?,?,?,?,?)",
+            (kind, name, ref_asin, created_by, _now()),
+        )
+        return int(cur.lastrowid)
+
+
+def get_follow(follow_id: int) -> Optional[dict[str, Any]]:
+    with connect() as c:
+        r = c.execute("SELECT * FROM follows WHERE id=?", (follow_id,)).fetchone()
+        return dict(r) if r else None
+
+
+def list_follows(created_by: Optional[str] = None) -> list[dict[str, Any]]:
+    with connect() as c:
+        if created_by:
+            rows = c.execute(
+                "SELECT * FROM follows WHERE created_by=? ORDER BY created_at DESC",
+                (created_by,),
+            ).fetchall()
+        else:
+            rows = c.execute("SELECT * FROM follows ORDER BY created_at DESC").fetchall()
+        return [dict(r) for r in rows]
+
+
+def touch_follow(follow_id: int) -> None:
+    with connect() as c:
+        c.execute("UPDATE follows SET last_checked_at=? WHERE id=?", (_now(), follow_id))
+
+
+def delete_follow(follow_id: int) -> None:
+    with connect() as c:
+        c.execute("DELETE FROM follows WHERE id=?", (follow_id,))
 
 
 # ---- users ----

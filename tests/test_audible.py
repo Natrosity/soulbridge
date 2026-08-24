@@ -62,6 +62,33 @@ def test_similar_returns_empty_without_asin():
         a.close()
 
 
+def test_by_author_returns_empty_without_name():
+    a = Audible("us")
+    try:
+        assert a.by_author("") == []
+        assert a.by_author(None) == []
+    finally:
+        a.close()
+
+
+def test_by_author_uses_the_author_filter_and_release_sort(monkeypatch):
+    a = Audible("us")
+    captured = {}
+
+    def fake_products(params):
+        captured.update(params)
+        return []
+
+    monkeypatch.setattr(a, "_products", fake_products)
+    try:
+        a.by_author("Brandon Sanderson", num=15)
+    finally:
+        a.close()
+    assert captured["author"] == "Brandon Sanderson"
+    assert captured["products_sort_by"] == "-ReleaseDate"
+    assert "keywords" not in captured          # the dedicated filter, not a text search
+
+
 def test_product_url_builds_region_domain():
     assert product_url("B004SOK2SE", "us") == "https://www.audible.com/pd/B004SOK2SE"
     assert product_url("B004SOK2SE", "au") == "https://www.audible.com.au/pd/B004SOK2SE"

@@ -73,6 +73,16 @@ class Audible:
         sort_by: 'BestSellers' (popular) or '-ReleaseDate' (new & upcoming)."""
         return self._products({"num_results": min(max(num, 1), 40), "products_sort_by": sort_by})
 
+    def by_author(self, name: str, num: int = 15) -> list[dict[str, Any]]:
+        """An author's catalog, newest first — used by author follows to spot
+        new releases. Uses Audible's dedicated `author` filter, which is more
+        precise than a keyword search (a keyword search on an author's name can
+        false-match books that merely mention them, e.g. anthology credits)."""
+        if not name:
+            return []
+        return self._products({"author": name, "num_results": min(max(num, 1), 40),
+                               "products_sort_by": "-ReleaseDate"})
+
     def similar(self, asin: str, similarity_type: str = "RawSimilarities",
                num: int = 12) -> list[dict[str, Any]]:
         """Books related to `asin` on Audible's own similarity graph — used for

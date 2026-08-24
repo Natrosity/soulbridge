@@ -19,7 +19,7 @@ from ..clients.audnexus import Audnexus
 from ..clients.jellyfin import Jellyfin
 from ..clients.plex import Plex
 from ..clients.slskd import Slskd
-from . import matching, tagging
+from . import auth, library, matching, tagging
 
 STATUS: dict[str, Any] = {
     "running": False,
@@ -636,6 +636,99 @@ def _discover_requests() -> None:
         abr.close()
 
 
+FOLLOW_CHECK_HOURS = 6           # how often to re-poll a followed author/series
+MAX_FOLLOW_ITEMS_PER_CHECK = 10  # safety cap on auto-requests from one follow in one check
+MAX_PLAUSIBLE_FUTURE_YEARS = 3   # beyond this, treat release_date as placeholder junk
+
+
+def _plausible_release_date(rd: str) -> bool:
+    """Audible's catalog carries placeholder dates (seen live: 2200-01-01) on
+    listings with no real release date — reject anything implausibly far out
+    rather than auto-creating a 'scheduled' item that can never come due."""
+    if not rd or len(rd) < 4 or not rd[:4].isdigit():
+        return False
+    return int(rd[:4]) <= int(db.today()[:4]) + MAX_PLAUSIBLE_FUTURE_YEARS
+
+
+def _follow_candidates(follow: dict[str, Any], aud: Audible) -> list[dict[str, Any]]:
+    """Audible listings potentially relevant to one follow."""
+    if follow["kind"] == "author":
+        return aud.by_author(follow["name"], num=15)
+    if follow["kind"] == "series" and follow.get("ref_asin"):
+        return aud.similar(follow["ref_asin"], "InTheSameSeries", num=15)
+    return []
+
+
+def _process_follow(follow: dict[str, Any], aud: Audible) -> int:
+    """Check one follow for new releases and auto-create requests for them —
+    gated by the follower's role exactly like a manual request (approval for
+    standard, auto for trusted/admin), but deliberately NOT by their request
+    quota, since a follow's volume isn't something they clicked their way
+    into. Only considers releases from on/after the day the follow was
+    created, so following a prolific author doesn't backfill their whole
+    catalogue. Returns how many new requests were created."""
+    user = db.get_user_by_name(follow["created_by"])
+    if not user:
+        return 0                                   # the follower's account is gone
+    cutoff = (follow.get("created_at") or "")[:10]
+    created = 0
+    for b in _follow_candidates(follow, aud):
+        if created >= MAX_FOLLOW_ITEMS_PER_CHECK:
+            break
+        asin = b.get("asin")
+        rd = b.get("release_date") or ""
+        if not asin or not rd or rd < cutoff or not _plausible_release_date(rd):
+            continue                               # no confirmed/plausible date, or predates the follow
+        if db.get_item_by_source("user", asin):
+            continue                                # already requested (by anyone)
+        authors = b.get("authors") or []
+        if library.owns(asin, b.get("title"), authors[0] if authors else ""):
+            continue
+        narrators = b.get("narrators") or []
+        upcoming = rd > db.today()
+        if not auth.is_trusted(user):
+            status = "awaiting_approval"
+        elif upcoming:
+            status = "scheduled"
+        else:
+            status = "pending"
+        item_id = db.upsert_item(
+            "user", asin, title=b.get("title") or "", author=authors[0] if authors else "",
+            narrator=narrators[0] if narrators else "", cover=b.get("cover"),
+            status=status, mode="auto", release_date=rd if upcoming else None,
+            requested_by=follow["created_by"], follow_id=follow["id"],
+        )
+        created += 1
+        db.log_event(f"Auto-requested '{b.get('title')}' via {follow['created_by']}'s "
+                     f"{follow['kind']} follow ('{follow['name']}')", item_id=item_id)
+        notify.event("request", "New release from a follow",
+                     f"'{b.get('title')}' — new from {follow['created_by']}'s "
+                     f"{follow['kind']} follow '{follow['name']}'"
+                     + (" (awaiting approval)" if status == "awaiting_approval" else ""))
+    return created
+
+
+def _check_follows() -> None:
+    """Periodically check each author/series follow for new releases. Follows
+    are checked at most every FOLLOW_CHECK_HOURS, not every tick, to be
+    reasonably polite to Audible's API."""
+    due = [f for f in db.list_follows() if db.hours_since(f.get("last_checked_at")) >= FOLLOW_CHECK_HOURS]
+    if not due:
+        return
+    region = settings.get("audible_region") or "us"
+    aud = Audible(region)
+    try:
+        for f in due:
+            try:
+                _process_follow(f, aud)
+            except Exception as e:
+                db.log_event(f"Follow check failed for '{f['name']}': {e}", "warn")
+            finally:
+                db.touch_follow(f["id"])
+    finally:
+        aud.close()
+
+
 def _release_due() -> None:
     """Promote 'scheduled' (not-yet-released) requests to 'pending' once their
     release date has arrived, so they only get searched for after publication."""
@@ -682,6 +775,7 @@ def tick() -> None:
 
     _discover_requests()
     _release_due()
+    _check_follows()
 
     if settings.get_bool("auto_download"):
         for item in db.list_items(statuses=["pending"]):

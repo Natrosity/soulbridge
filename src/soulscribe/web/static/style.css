@@ -312,6 +312,7 @@ a.libcard { text-decoration: none; color: inherit; }
 .daction form { margin: 0; }
 .daction .mismatch { margin-top: 6px; }
 .daction .reqform { display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
+.daction.follow-actions { display: flex; flex-direction: column; gap: 6px; align-items: flex-end; }
 a.btn { display: inline-block; text-decoration: none; }
 
 /* 'Working…' state for controls that kick off a slow op (e.g. a Soulseek search) */

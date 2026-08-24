@@ -1,0 +1,85 @@
+{% extends "base.html" %}
+{% block title %}Follows · {{ instance }}{% endblock %}
+{% block content %}
+
+<section class="panel">
+  <h2>Your follows</h2>
+  {% if follows %}
+  <table class="results">
+    <thead><tr><th>Kind</th><th>Name</th><th>Since</th><th>Last checked</th><th></th></tr></thead>
+    <tbody>
+    {% for f in follows %}
+      <tr>
+        <td>{{ f.kind | capitalize }}</td>
+        <td>{{ f.name }}</td>
+        <td>{{ f.created_at[:10] }}</td>
+        <td>{{ f.last_checked_at[:16].replace('T', ' ') if f.last_checked_at else 'not yet' }}</td>
+        <td>
+          <form method="post" action="/follows/{{ f.id }}/delete" data-confirm="Unfollow {{ f.name }}?">
+            <input type="hidden" name="csrf" value="{{ csrf }}">
+            <button class="btn ghost sm" type="submit" data-busy="Unfollowing…">Unfollow</button>
+          </form>
+        </td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+    <p class="empty">You're not following anyone yet. Search below to follow an author or
+      series — new releases are requested automatically (subject to the usual approval
+      rules for your account).</p>
+  {% endif %}
+</section>
+
+<section class="panel">
+  <h2>Find someone to follow</h2>
+  <form method="post" action="/follows/search" class="searchform">
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+    <input type="text" name="q" placeholder="Search by author, series, or book title" value="{{ q }}" required autofocus>
+    <button class="btn primary" type="submit" data-busy="Searching…">Search</button>
+  </form>
+
+  {% if results is not none %}
+    {% if not results %}<p class="empty">No matches on Audible. Try different words.</p>{% endif %}
+    {% for b in results %}
+    <div class="drow">
+      <div class="dcover">
+        {% if b.cover %}<img src="{{ b.cover }}" alt="" loading="lazy">{% else %}<div class="ph">♪</div>{% endif %}
+      </div>
+      <div class="dmeta">
+        <div class="dtitle">{{ b.title }}{% if b.subtitle %}<span class="dsubtitle">: {{ b.subtitle }}</span>{% endif %}</div>
+        <div class="dauthor">{{ b.authors | join(', ') or 'Unknown author' }}</div>
+        {% if b.series %}<div class="dsub2">{{ b.series }}</div>{% endif %}
+      </div>
+      <div class="daction follow-actions">
+        {% if b.authors %}
+          {% if b.following_author %}
+            <span class="badge ok">Following {{ b.authors[0] }}</span>
+          {% else %}
+            <form method="post" action="/follows">
+              <input type="hidden" name="csrf" value="{{ csrf }}">
+              <input type="hidden" name="kind" value="author">
+              <input type="hidden" name="name" value="{{ b.authors[0] }}">
+              <button class="btn sm" type="submit" data-busy="Following…">Follow {{ b.authors[0] }}</button>
+            </form>
+          {% endif %}
+        {% endif %}
+        {% if b.series %}
+          {% if b.following_series %}
+            <span class="badge ok">Following {{ b.series }}</span>
+          {% else %}
+            <form method="post" action="/follows">
+              <input type="hidden" name="csrf" value="{{ csrf }}">
+              <input type="hidden" name="kind" value="series">
+              <input type="hidden" name="name" value="{{ b.series }}">
+              <input type="hidden" name="ref_asin" value="{{ b.asin }}">
+              <button class="btn sm ghost" type="submit" data-busy="Following…">Follow series: {{ b.series }}</button>
+            </form>
+          {% endif %}
+        {% endif %}
+      </div>
+    </div>
+    {% endfor %}
+  {% endif %}
+</section>
+{% endblock %}

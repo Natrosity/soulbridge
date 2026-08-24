@@ -25,7 +25,7 @@ from .. import __version__, db, settings
 from ..env import env
 from ..core import auth, worker
 from .routes import auth as auth_routes
-from .routes import dashboard, library, manual, requests, settings_routes, users
+from .routes import dashboard, follows, library, manual, requests, settings_routes, users
 
 HERE = Path(__file__).parent
 
@@ -99,6 +99,7 @@ app.include_router(users.router)
 app.include_router(dashboard.router)
 app.include_router(manual.router)
 app.include_router(requests.router)
+app.include_router(follows.router)
 app.include_router(library.router)
 app.include_router(settings_routes.router)
 
