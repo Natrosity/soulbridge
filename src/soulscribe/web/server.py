@@ -23,7 +23,7 @@ from fastapi.templating import Jinja2Templates
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.middleware.sessions import SessionMiddleware
 
-from .. import __version__, db, settings
+from .. import __version__, cache, db, settings
 from ..env import env
 from ..clients import notify, plextv
 from ..clients.abr import ABR
@@ -35,8 +35,8 @@ from ..core import auth, worker
 HERE = Path(__file__).parent
 templates = Jinja2Templates(directory=str(HERE / "templates"))
 
-_SEARCH_CACHE: dict[str, dict[str, Any]] = {}
-_PLEX_PENDING: dict[str, dict[str, Any]] = {}   # oauth state -> {pin_id, ts}
+_SEARCH_CACHE = cache.TTLCache(1800)            # token -> a manual/interactive search result set
+_PLEX_PENDING = cache.TTLCache(900)             # oauth state -> {pin_id}
 
 CSP = ("default-src 'self'; script-src 'self'; style-src 'self'; "
        "img-src 'self' data: https:; font-src 'self'; object-src 'none'; "
@@ -281,9 +281,7 @@ def plex_start(request: Request):
     finally:
         ptv.close()
     state = uuid.uuid4().hex
-    _PLEX_PENDING[state] = {"pin_id": pin["id"], "ts": time.time()}
-    for k in [k for k, v in _PLEX_PENDING.items() if time.time() - v["ts"] > 900]:
-        _PLEX_PENDING.pop(k, None)
+    _PLEX_PENDING.set(state, {"pin_id": pin["id"]})
     request.session["plex_state"] = state          # bind the flow to this browser
     forward = f"{_public_base(request)}/auth/plex/callback?state={state}"
     return RedirectResponse(plextv.auth_url(cid, pin["code"], forward), status_code=303)
@@ -468,10 +466,8 @@ def do_search(request: Request, title: str = Form(...), author: str = Form(""),
               item: Optional[int] = Form(None)):
     results = worker.manual_search(title, author)
     token = uuid.uuid4().hex
-    _SEARCH_CACHE[token] = {"ts": time.time(), "title": title, "author": author,
-                            "item": item, "results": results}
-    for k in [k for k, v in _SEARCH_CACHE.items() if time.time() - v["ts"] > 1800]:
-        _SEARCH_CACHE.pop(k, None)
+    _SEARCH_CACHE.set(token, {"title": title, "author": author,
+                              "item": item, "results": results})
     return templates.TemplateResponse(request, "search.html", _ctx(
         request, title=title, author=author, item_id=item, results=results, token=token,
     ))
@@ -648,8 +644,8 @@ def _quota_message(user: dict[str, Any]) -> Optional[str]:
 
 
 # cached discovery aids
-_LIB_INDEX: dict[str, Any] = {}                 # {ts, asins, keys}
-_BROWSE: dict[str, dict[str, Any]] = {}         # sort -> {ts, items}
+_LIB_INDEX = cache.TTLCache(300)                # "lib" -> (asins, keys), 5 min
+_BROWSE = cache.TTLCache(6 * 3600)              # Audible sort -> browse items, 6h
 # (row label, Audible sort, which releases to show: 'released' | 'upcoming')
 HERO_ROWS = (("Bestsellers", "BestSellers", "released"),
              ("Releasing Soon", "-ReleaseDate", "upcoming"))
@@ -660,13 +656,13 @@ def _library_index() -> tuple[set, set]:
     url, key, lib = settings.get("abs_url"), settings.get("abs_api_key"), settings.get("abs_library_id")
     if not (url and key and lib):
         return set(), set()
-    c = _LIB_INDEX
-    if c.get("ts") and time.time() - c["ts"] < 300:
-        return c["asins"], c["keys"]
+    hit = _LIB_INDEX.get("lib")
+    if hit is not None:
+        return hit
     a = ABS(url, key)
     asins, keys = a.library_index(lib)
     a.close()
-    _LIB_INDEX.update(ts=time.time(), asins=asins, keys=keys)
+    _LIB_INDEX.set("lib", (asins, keys))
     return asins, keys
 
 
@@ -697,17 +693,16 @@ def _hero_rows() -> list[dict[str, Any]]:
     today = db.today()
     rows: list[dict[str, Any]] = []
     for label, sort, which in HERO_ROWS:
-        c = _BROWSE.get(sort)
-        if c and time.time() - c["ts"] < 6 * 3600:
-            items = c["items"]
-        else:
+        items = _BROWSE.get(sort)
+        if items is None:
             aud = Audible(region)
-            items = aud.browse(sort, 40)            # fetch wide, then filter by release
+            fetched = aud.browse(sort, 40)          # fetch wide, then filter by release
             aud.close()
-            if items:
-                _BROWSE[sort] = {"ts": time.time(), "items": items}
-            elif c:
-                items = c["items"]                  # keep last-good on a transient failure
+            if fetched:
+                _BROWSE.set(sort, fetched)
+                items = fetched
+            else:
+                items = _BROWSE.peek(sort) or []    # keep last-good on a transient failure
         if which == "upcoming":
             items = [b for b in items if (b.get("release_date") or "") > today]
         else:
@@ -806,9 +801,7 @@ def request_candidates(request: Request, item_id: int):
                "book_number": booknum}
     results = worker.manual_search(item["title"], item.get("author") or "", edition, siblings)
     token = uuid.uuid4().hex
-    _SEARCH_CACHE[token] = {"ts": time.time(), "item": item_id, "results": results}
-    for k in [k for k, v in _SEARCH_CACHE.items() if time.time() - v["ts"] > 1800]:
-        _SEARCH_CACHE.pop(k, None)
+    _SEARCH_CACHE.set(token, {"item": item_id, "results": results})
     return templates.TemplateResponse(request, "candidates.html", _ctx(
         request, item=item, results=results, token=token))
 
