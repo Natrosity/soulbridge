@@ -168,17 +168,21 @@ Not user-facing; makes every later phase in this epoch cheaper and safer.
   covers the "why did this score X" need for now, so this is a nice-to-have
   rather than a gap.
 
-## Phase 8 — Discovery Tier 1 + follows
+## Phase 8 — Discovery Tier 1 + follows  *(discovery + follows done — v0.18.0)*
 
 - **Series completion** hero row: cross-reference the ABS library against
   series membership (via Audible's `sims?similarity_type=InTheSameSeries` /
   `NextInSameSeries` and the `relationships` response group) and surface
   "Complete the series — you're missing books 3 & 4." Ships against today's
-  schema; no taste model needed.
-- "More from authors you own" (`ByTheSameAuthor`) and "Because you have X"
-  (`RawSimilarities`) hero rows, reusing `_mark_results()`.
+  schema; no taste model needed. ✅ done (v0.17.0) — plus "More from authors
+  you own" (`ByTheSameAuthor`-equivalent search) and "Because you have X"
+  (`RawSimilarities`), reusing `_mark_results()`.
 - **Author/series follow → auto-request new releases**, gated by role same as
   any other request (approval for `standard`, auto for `trusted`/`admin`).
+  ✅ done (v0.18.0) — `core/library.py` extracted as the shared "already own
+  this" seam (used by discovery *and* follows) so Phase 10's books/editions
+  model has one place to update, not several; `follows` table + worker
+  `_check_follows()`/`_process_follow()`; deliberately not quota-limited.
 - Requester-visible download progress (%, not just status) on My Requests,
   sourced from slskd/download-client transfer state.
 - Generalise the existing "Wrong book?" mismatch button into "Try a different
@@ -379,3 +383,25 @@ The keystone phase: split the `items` table's conflation of "a request" from
   candidate picker (no custom JS). Verified live by monkeypatching `manual_search` and
   driving `/search` in a real browser (no slskd available locally). "Test against last
   search" preview remains deferred (see Phase 7 above).
+- 2026-08-24: Phase 8 discovery Tier 1 (v0.17.0) — three personalised `/discover` hero
+  rows seeded from the ABS library: "Complete the series" (Audible `sims`
+  `InTheSameSeries`), "More from authors you own", "Because you have X" (`sims`
+  `RawSimilarities`). New `Audible.similar()` client method + a shared `_normalize()`;
+  verified the `sims` response envelope (`similar_products`, not `products`) live before
+  writing consuming code. Verified live end-to-end (mocked ABS, real Audible API,
+  real request round-trip). One observation, not a bug: Audible sometimes lists multiple
+  ASINs for the same edition, so a missing-books row can occasionally surface an edition
+  variant of an owned book — consistent with how the app already treats editions.
+- 2026-08-24: Phase 8 follows (v0.18.0) — follow an author or series; new `/follows` page
+  + `core/worker._check_follows()` auto-requests new releases going forward (role-gated,
+  not quota-limited, no backlist flood — only releases dated on/after the follow's
+  creation count). Extracted `core/library.py` as the shared "already own this" check
+  (used by both discovery heroes and the follow-checker) specifically so Phase 10's
+  books/editions model has one seam to update later, not several — a deliberate call made
+  after being asked to keep Phase 10 compatibility in mind while building this. New
+  `Audible.by_author()` (a dedicated `author=` filter, more precise than keyword search —
+  verified live). Caught a real bug live: Audible's catalog uses a placeholder release
+  date (`2200-01-01`) on some listings, which would have created a `scheduled` request
+  that can never come due; added a plausibility guard, re-verified against the real API.
+  Requester-visible progress, generalised retry, and the wishlist/notify-when-available
+  flow are still open from Phase 8 (see above).
