@@ -345,41 +345,56 @@ def _probe(path: str) -> tuple[float, Optional[str]]:
         return 0.0, None
 
 
-def _file_edition(path: str) -> tuple[str, str]:
-    """The narrator (composer tag) and year the downloaded file claims for itself."""
+def _file_tags(path: str) -> dict[str, str]:
+    """The narrator/year/title/album/genre the downloaded file claims for itself."""
+    out = {"composer": "", "year": "", "title": "", "album": "", "genre": ""}
     try:
         ad = tagging._adapter(path)
         if ad is None:
-            return "", ""
-        return ad.get("composer") or "", ad.get("year") or ""
+            return out
+        for k in out:
+            out[k] = ad.get(k) or ""
     except Exception:
-        return "", ""
+        pass
+    return out
 
 
 def _resolve_edition(item: dict[str, Any], target_meta: dict[str, Any],
-                     files: list[str]) -> tuple[dict[str, Any], Optional[str]]:
-    """Work out which edition was actually downloaded. If the file's own narrator/year
-    point to a different (alternate) edition of the same book, fetch and return that
-    edition's metadata instead, plus a note for the history. Else return the target."""
-    if not (item.get("source_id") and files):
-        return target_meta, None
-    file_narr, file_year = _file_edition(files[0])
-    if not (file_narr or file_year):
-        return target_meta, None
-    target = {"narrators": target_meta.get("narrators") or [], "year": target_meta.get("year")}
-    alt = matching.pick_edition(file_narr, file_year, target, book_editions(item))
-    if not alt or not alt.get("asin"):
-        return target_meta, None
-    aud = Audnexus(settings.get("audible_region") or "us")
-    try:
-        alt_meta = audnexus.to_meta(aud.book(alt["asin"]))
-    finally:
-        aud.close()
-    if not alt_meta:
-        return target_meta, None
-    narr = ", ".join(alt_meta.get("narrators") or []) or file_narr
-    note = "Alternate edition: read by " + narr + (f" ({alt_meta['year']})" if alt_meta.get("year") else "")
-    return alt_meta, note
+                     files: list[str]) -> tuple[dict[str, Any], Optional[str], bool]:
+    """Decide which edition was actually downloaded → (metadata to tag with, history
+    note, liberal?). liberal=False means tag conservatively (keep the file's own
+    title), used for a dramatised/Graphic Audio rip we have no canonical listing for."""
+    if not files:
+        return target_meta, None, True
+    tags = _file_tags(files[0])
+
+    # 1. a different narrator/year that matches a catalogued alternate edition
+    if item.get("source_id") and (tags["composer"] or tags["year"]):
+        target = {"narrators": target_meta.get("narrators") or [], "year": target_meta.get("year")}
+        alt = matching.pick_edition(tags["composer"], tags["year"], target, book_editions(item))
+        if alt and alt.get("asin"):
+            aud = Audnexus(settings.get("audible_region") or "us")
+            try:
+                alt_meta = audnexus.to_meta(aud.book(alt["asin"]))
+            finally:
+                aud.close()
+            if alt_meta:
+                narr = ", ".join(alt_meta.get("narrators") or []) or tags["composer"]
+                note = "Alternate edition: read by " + narr + (
+                    f" ({alt_meta['year']})" if alt_meta.get("year") else "")
+                return alt_meta, note, True
+
+    # 2. a dramatised / Graphic Audio edition (not in the catalogue API) — recognise it
+    # from the file's own title/genre and keep its real title rather than relabelling.
+    blob = matching.norm(" ".join([
+        item.get("slskd_dir") or "", tags["title"], tags["album"], tags["genre"],
+        " ".join(json.loads(item.get("chosen_files") or "[]")),
+    ]))
+    if not any(m in matching.norm(item["title"]) for m in matching.DRAMATIZED) \
+            and any(m in blob for m in matching.DRAMATIZED):
+        return target_meta, "Alternate edition: dramatised / Graphic Audio version", False
+
+    return target_meta, None, True
 
 
 def _detect_music(paths: list[str]) -> Optional[str]:
@@ -463,8 +478,8 @@ _LANG_MARKERS = {
 
 
 def _edition_warning(item: dict[str, Any], meta: dict[str, Any]) -> None:
-    """Best-effort sanity check that the grabbed files match the requested edition —
-    logs a warning (never blocks) on an obvious language or dramatised/standard clash."""
+    """Best-effort language sanity check — logs a warning (never blocks) when the
+    grabbed files look like a different language than the requested edition."""
     blob = matching.norm((item.get("slskd_dir") or "") + " "
                          + " ".join(json.loads(item.get("chosen_files") or "[]")))
     lang = (meta.get("language") or "").strip().lower()
@@ -475,11 +490,6 @@ def _edition_warning(item: dict[str, Any], meta: dict[str, Any]) -> None:
                              f"the requested edition is {lang.title()} — verify the edition.",
                              "warn", item["id"])
                 return
-    req_drama = any(m in matching.norm(item["title"]) for m in matching.DRAMATIZED)
-    cand_drama = any(m in blob for m in matching.DRAMATIZED)
-    if cand_drama and not req_drama:
-        db.log_event(f"Heads up: '{item['title']}' download looks like a dramatised/full-cast "
-                     "edition, but a standard edition was requested.", "warn", item["id"])
 
 
 def _write_metadata(item: dict[str, Any], dest: str, files: list[str]) -> None:
@@ -505,9 +515,9 @@ def _write_metadata(item: dict[str, Any], dest: str, files: list[str]) -> None:
 
     # If the download's own tags say it's a different edition of this book, tag it as
     # what it actually is (not the requested edition) and flag it in the history.
-    note = None
+    note, liberal = None, True
     if asin and meta.get("asin"):
-        meta, note = _resolve_edition(item, meta, files)
+        meta, note, liberal = _resolve_edition(item, meta, files)
     db.update_item(item["id"], note=note)         # set or clear the edition note
     if note:
         db.log_event(f"'{item['title']}': {note} — tagged as the edition actually downloaded.",
@@ -520,9 +530,10 @@ def _write_metadata(item: dict[str, Any], dest: str, files: list[str]) -> None:
         finally:
             ac.close()
 
-    _edition_warning(item, meta)                  # flag an obvious language/edition mismatch
+    _edition_warning(item, meta)                  # flag an obvious language mismatch
     cover_url = meta.get("cover_url") or item.get("cover")
-    overwrite = settings.get_bool("overwrite_tags")
+    # tag conservatively for an edition we can't fully identify (keep its own title)
+    overwrite = settings.get_bool("overwrite_tags") and liberal
     embed = settings.get_bool("embed_cover")
     tagged = 0
     for p in files:

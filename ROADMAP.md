@@ -133,6 +133,13 @@ and audited, because the app becomes internet-facing.
 - 2026-08-23: Phase 6 complete (v0.10.0) — Apprise notifications (request/complete/
   failure + test button; new `apprise` dep → image rebuild), ABR history import,
   cutover-ready. All six phases shipped; ABR retirement is now an operator choice.
+- 2026-08-24: Dramatised/Graphic Audio edition flagging (v0.14.1) — the Audible catalog API doesn't
+  return Graphic Audio editions (verified: even "mistborn graphic audio" returns only the standard
+  listing), so they can't be found by lookup. Instead the post-download check now recognises a
+  dramatised/Graphic Audio rip from the file's own title/genre tags (+ folder/filenames), flags it
+  "Alternate edition: dramatised / Graphic Audio version", and tags it conservatively so it keeps
+  its real title. (Split Part 1/Part 2 editions remain a known hard case; foreign-language
+  alternates are covered by the existing language warning.)
 - 2026-08-24: Alternate-edition detection + liberal tag cleanup (v0.14.0) — post-download, read the
   file's own narrator/year (composer + year tags) and, if they match a different edition of the same
   book (via Audible alternate-edition lookup), tag it as that edition and flag "Alternate edition"
