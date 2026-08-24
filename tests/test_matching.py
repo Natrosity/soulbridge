@@ -199,6 +199,110 @@ def test_bitrate_does_not_override_real_signal():
     assert best and best.username == "narr"
 
 
+# ------------------------------------------------------------ tunable weights
+def test_default_prefs_without_weights_uses_hardcoded_defaults():
+    # PREFS above never sets "weights"/"keywords" — score_group must fall back
+    # to DEFAULT_WEIGHTS/DEFAULT_KEYWORDS, which is what every test above relies on.
+    g = m.Group(username="u", directory=r"Audiobooks\X", free_slot=True,
+               files=[{"filename": r"Audiobooks\X\Fire (Unabridged).m4b", "size": 300_000_000, "bitRate": 128}],
+               total_size=300_000_000, exts={".m4b"})
+    assert m.score_group(g, "Fire", "", PREFS) == m.score_group(g, "Fire", "", {**PREFS, "weights": {}})
+
+
+def test_custom_weight_changes_ranking():
+    # two m4b files, otherwise equal, differing only by format-order rank (m4b vs mp3
+    # in the preferred list) — raising format_step should widen the gap.
+    a = m.Group(username="a", directory=r"Audiobooks\Dark Matter", free_slot=True,
+               files=[{"filename": r"Audiobooks\Dark Matter\Dark Matter - Blake Crouch.m4b",
+                      "size": 300_000_000, "bitRate": 128}], total_size=300_000_000, exts={".m4b"})
+    b = m.Group(username="b", directory=r"Audiobooks\Dark Matter", free_slot=True,
+               files=[{"filename": r"Audiobooks\Dark Matter\Dark Matter - Blake Crouch.mp3",
+                      "size": 300_000_000, "bitRate": 128}], total_size=300_000_000, exts={".mp3"})
+    default_gap = (m.score_group(a, "Dark Matter", "Blake Crouch", PREFS)
+                  - m.score_group(b, "Dark Matter", "Blake Crouch", PREFS))
+    boosted = {**PREFS, "weights": {"format_step": 40}}
+    boosted_gap = (m.score_group(a, "Dark Matter", "Blake Crouch", boosted)
+                  - m.score_group(b, "Dark Matter", "Blake Crouch", boosted))
+    assert boosted_gap > default_gap
+
+
+def test_lowering_coverage_floor_admits_a_previously_rejected_candidate():
+    # author is in the filename (has_author=True) so the separate generic-title
+    # guard doesn't also reject this — isolates the coverage_floor knob.
+    resp = [_resp("partial", True, [_f(r"x\Audiobooks\The Fellowship - Tolkien.m4b", 300_000_000)])]
+    assert m.pick_best(resp, "The Fellowship of the Ring", "J.R.R. Tolkien", PREFS) is None
+    lenient = {**PREFS, "weights": {"coverage_floor": 0.3}}
+    best = m.pick_best(resp, "The Fellowship of the Ring", "J.R.R. Tolkien", lenient)
+    assert best and best.username == "partial"
+
+
+def test_custom_keyword_rejects_a_previously_accepted_candidate():
+    resp = [_resp("g", True, [_f(
+        r"x\Audiobooks\Rachel Reid - The Long Game\Rachel Reid - The Long Game.m4b", 250_000_000)])]
+    assert m.pick_best(resp, "The Long Game", "Rachel Reid", PREFS) is not None
+    # add a spam marker that happens to appear in this path
+    custom = {**PREFS, "keywords": {"spam": ("rachel reid",)}}
+    assert m.pick_best(resp, "The Long Game", "Rachel Reid", custom) is None
+
+
+def test_partial_weight_override_keeps_other_defaults():
+    # overriding one weight must not silently zero out the others
+    g = m.Group(username="u", directory=r"Audiobooks\Dark Matter", free_slot=True,
+               files=[{"filename": r"Audiobooks\Dark Matter\Dark Matter - Blake Crouch.m4b",
+                      "size": 300_000_000, "bitRate": 128}], total_size=300_000_000, exts={".m4b"})
+    only_author_changed = {**PREFS, "weights": {"author_bonus": 999}}
+    score = m.score_group(g, "Dark Matter", "Blake Crouch", only_author_changed)
+    # single-m4b bonus (default 20) must still have applied
+    assert score >= 100 + 999 + 20 - 5   # loose bound; just proves other weights survived
+
+
+def test_explain_breakdown_present_and_reject_reason_recorded():
+    breakdown: list = []
+    g = m.Group(username="u", directory=r"Audiobooks\Fire", free_slot=True,
+               files=[{"filename": r"Audiobooks\Fire\Fire (Unabridged).m4b", "size": 300_000_000, "bitRate": 128}],
+               total_size=300_000_000, exts={".m4b"})
+    score = m.score_group(g, "Fire", "Kristin Cashore", PREFS, explain=breakdown)
+    assert score == -1.0
+    assert len(breakdown) == 1 and breakdown[0]["label"].startswith("Rejected:")
+
+    breakdown2: list = []
+    g2 = m.Group(username="u", directory=r"Audiobooks\Fire - Kristin Cashore", free_slot=True,
+                files=[{"filename": r"Audiobooks\Fire - Kristin Cashore\Fire - Kristin Cashore.m4b",
+                       "size": 300_000_000, "bitRate": 128}], total_size=300_000_000, exts={".m4b"})
+    score2 = m.score_group(g2, "Fire", "Kristin Cashore", PREFS, explain=breakdown2)
+    assert score2 > 0
+    assert len(breakdown2) >= 3                        # title match + format + author, at least
+    assert all("label" in e and "points" in e for e in breakdown2)
+
+
+def test_weight_defaults_are_valid_for_their_own_html_number_constraints():
+    # A default that isn't a multiple of its own step (from its own min) fails
+    # native HTML5 <input type=number step=...> validation and SILENTLY blocks
+    # the settings form from submitting at all (no error shown, no server request) —
+    # this caught a real bug (bitrate_cap default 3.2 vs step 0.5) live in a browser.
+    from decimal import Decimal
+    for key, (_label, _help, lo, _hi, step) in m.WEIGHT_META.items():
+        default = m.DEFAULT_WEIGHTS[key]
+        remainder = (Decimal(str(default)) - Decimal(str(lo))) % Decimal(str(step))
+        assert remainder == 0, f"{key}: default {default} is not a multiple of step {step} from min {lo}"
+    # every preset's overrides must also land on a valid step, or applying a preset
+    # then saving would hit the same silent-block bug.
+    for name, overrides in m.PRESETS.items():
+        for key, value in overrides.items():
+            lo, _hi, step = m.WEIGHT_META[key][2], m.WEIGHT_META[key][3], m.WEIGHT_META[key][4]
+            remainder = (Decimal(str(value)) - Decimal(str(lo))) % Decimal(str(step))
+            assert remainder == 0, f"preset {name!r} {key}: {value} is not a multiple of step {step}"
+
+
+def test_presets_apply_cleanly_over_defaults():
+    for name, overrides in m.PRESETS.items():
+        assert name in m.PRESET_LABELS
+        merged = {**m.DEFAULT_WEIGHTS, **overrides}
+        assert set(merged) == set(m.DEFAULT_WEIGHTS)   # no stray/unknown keys introduced
+        for k in overrides:
+            assert k in m.DEFAULT_WEIGHTS               # every override name is a real weight
+
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for fn in fns:

@@ -141,6 +141,9 @@ tr.rejected { opacity: 0.5; }
 
 .settingsform fieldset { border: 1px solid var(--line); border-radius: var(--radius); margin: 0 0 16px; padding: 8px 16px 16px; }
 .settingsform legend { padding: 0 8px; color: var(--accent2); font-weight: 600; }
+.presetbar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 10px 0 4px; }
+.presetlabel { color: var(--muted); font-size: 12px; font-weight: 500; }
+.fieldnote { color: var(--muted); font-size: 12px; margin: 0 0 6px; }
 .field { display: grid; grid-template-columns: 220px 1fr; gap: 14px; align-items: start; padding: 10px 0; border-top: 1px solid var(--line); }
 .field:first-of-type { border-top: none; }
 .field label { color: var(--text); font-weight: 500; padding-top: 7px; }
