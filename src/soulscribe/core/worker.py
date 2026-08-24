@@ -700,7 +700,7 @@ def tick() -> None:
 
 def _run() -> None:
     STATUS["running"] = True
-    db.log_event("Soulbridge worker started")
+    db.log_event("Soulscribe worker started")
     while not _stop.is_set():
         try:
             tick()
@@ -714,7 +714,7 @@ def _run() -> None:
 
 
 def start() -> None:
-    t = threading.Thread(target=_run, name="soulbridge-worker", daemon=True)
+    t = threading.Thread(target=_run, name="soulscribe-worker", daemon=True)
     t.start()
 
 

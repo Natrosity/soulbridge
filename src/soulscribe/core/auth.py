@@ -11,6 +11,7 @@ from argon2 import PasswordHasher
 from argon2.exceptions import VerifyMismatchError, VerificationError
 
 from .. import db
+from ..env import env
 
 _ph = PasswordHasher()
 
@@ -21,9 +22,9 @@ ROLES = ("admin", "trusted", "standard")
 
 # ---- secret (session signing) ----
 def get_secret() -> str:
-    env = os.environ.get("SOULBRIDGE_SECRET")
-    if env:
-        return env
+    secret = env("SECRET")
+    if secret:
+        return secret
     path = os.path.join(db.CONFIG_DIR, "secret.key")
     try:
         with open(path) as f:
@@ -47,7 +48,7 @@ def get_secret() -> str:
 # A fixed hash to verify against when a login names a non-existent user, so the
 # response takes the same time as a real (wrong-password) attempt — no timing oracle
 # for username enumeration.
-_DUMMY_HASH = _ph.hash("soulbridge-nonexistent-account")
+_DUMMY_HASH = _ph.hash("soulscribe-nonexistent-account")
 
 
 def hash_pw(password: str) -> str:

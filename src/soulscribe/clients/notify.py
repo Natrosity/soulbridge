@@ -55,7 +55,7 @@ def test() -> tuple[bool, str]:
     added = sum(1 for u in targets if ap.add(u))
     if not added:
         return False, "No valid Apprise URLs (check the format)."
-    ok = ap.notify(title="Soulbridge test",
+    ok = ap.notify(title="Soulscribe test",
                    body="If you can read this, notifications are working. 📚")
     return (bool(ok), "Test notification sent." if ok else
             "Apprise rejected the notification (check the URLs/credentials).")

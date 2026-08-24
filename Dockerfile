@@ -2,8 +2,8 @@ FROM python:3.12-slim
 
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
-    SOULBRIDGE_CONFIG_DIR=/config \
-    SOULBRIDGE_PORT=8793
+    SOULSCRIBE_CONFIG_DIR=/config \
+    SOULSCRIBE_PORT=8793
 
 WORKDIR /app
 
@@ -15,6 +15,6 @@ EXPOSE 8793
 VOLUME ["/config"]
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=15s \
-  CMD python -c "import urllib.request,os; urllib.request.urlopen('http://127.0.0.1:'+os.environ.get('SOULBRIDGE_PORT','8793')+'/health')" || exit 1
+  CMD python -c "import urllib.request,os; urllib.request.urlopen('http://127.0.0.1:'+os.environ.get('SOULSCRIBE_PORT','8793')+'/health')" || exit 1
 
-CMD ["soulbridge"]
+CMD ["soulscribe"]

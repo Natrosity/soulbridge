@@ -13,7 +13,7 @@ BASE = "https://api.audnex.us"
 class Audnexus:
     def __init__(self, region: str = "us", timeout: float = 20.0):
         self.region = region
-        self._c = httpx.Client(timeout=timeout, headers={"User-Agent": "soulbridge"})
+        self._c = httpx.Client(timeout=timeout, headers={"User-Agent": "soulscribe"})
 
     def close(self) -> None:
         self._c.close()
@@ -34,7 +34,7 @@ class Audnexus:
 
 
 def to_meta(data: Optional[dict[str, Any]]) -> Optional[dict[str, Any]]:
-    """Normalise an Audnexus book payload into Soulbridge's logical fields."""
+    """Normalise an Audnexus book payload into Soulscribe's logical fields."""
     if not data:
         return None
     authors = [a.get("name") for a in data.get("authors", []) if a.get("name")]

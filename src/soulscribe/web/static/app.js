@@ -1,4 +1,4 @@
-// Soulbridge client scripts (kept external so the CSP can forbid inline JS).
+// Soulscribe client scripts (kept external so the CSP can forbid inline JS).
 (function () {
   "use strict";
 

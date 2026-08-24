@@ -1,8 +1,8 @@
-# Soulbridge roadmap — request-platform expansion
+# Soulscribe roadmap — request-platform expansion
 
-Turning Soulbridge from a fulfilment engine (fed by AudioBookRequest) into a
+Turning Soulscribe from a fulfilment engine (fed by AudioBookRequest) into a
 self-contained request platform that can replace ABR. Phases are built and
-reviewed in order; Soulbridge and ABR can run side by side until cutover.
+reviewed in order; Soulscribe and ABR can run side by side until cutover.
 
 ## Locked decisions
 
@@ -99,7 +99,7 @@ and audited, because the app becomes internet-facing.
 - Import existing ABR request history (admin button on `/requests/all`): past
   fulfilments become library records, outstanding ones queue — dedup via upsert.
 - Retire ABR: an operational step for the operator (clear the ABR URL/key once
-  Soulbridge's own `/discover` + requests are the front door). Soulbridge is
+  Soulscribe's own `/discover` + requests are the front door). Soulscribe is
   self-sufficient without ABR.
 
 ---
@@ -201,5 +201,5 @@ and audited, because the app becomes internet-facing.
   security pass. Verified live: every POST is CSRF-protected; admin surfaces reject
   standard users (GET + POST); unauthenticated is bounced; request ownership is enforced
   (candidates/pick/auto); no XSS (`|safe`-free, autoescape on); no secrets in logs; strict
-  CSP. Hardening added: opt-in Secure session cookies (`SOULBRIDGE_SECURE_COOKIES`) and
+  CSP. Hardening added: opt-in Secure session cookies (`SOULSCRIBE_SECURE_COOKIES`) and
   constant-time login for unknown usernames. No HIGH/MEDIUM findings.

@@ -14,8 +14,26 @@ try:
 except Exception:                                    # pragma: no cover
     ZoneInfo = None                                  # type: ignore
 
-CONFIG_DIR = os.environ.get("SOULBRIDGE_CONFIG_DIR", "/config")
-DB_PATH = os.environ.get("SOULBRIDGE_DB", os.path.join(CONFIG_DIR, "soulbridge.db"))
+from .env import env
+
+CONFIG_DIR = env("CONFIG_DIR", "/config")
+
+
+def _resolve_db_path() -> str:
+    """Honour an explicit SOULSCRIBE_DB/SOULBRIDGE_DB override, else use
+    soulscribe.db — but keep using an existing legacy soulbridge.db in place so
+    a rename doesn't strand the data of an upgraded install."""
+    override = env("DB")
+    if override:
+        return override
+    legacy = os.path.join(CONFIG_DIR, "soulbridge.db")
+    current = os.path.join(CONFIG_DIR, "soulscribe.db")
+    if os.path.exists(legacy) and not os.path.exists(current):
+        return legacy
+    return current
+
+
+DB_PATH = _resolve_db_path()
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS settings (

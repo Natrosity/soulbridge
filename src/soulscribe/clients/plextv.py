@@ -15,7 +15,7 @@ PLEXTV = "https://plex.tv"
 AUTH_APP = "https://app.plex.tv/auth"
 
 
-def auth_url(client_id: str, code: str, forward_url: str, product: str = "Soulbridge") -> str:
+def auth_url(client_id: str, code: str, forward_url: str, product: str = "Soulscribe") -> str:
     """The app.plex.tv page the user visits to authorise the PIN. Params live in the
     URL fragment (#?...), which is how Plex's hosted auth expects them."""
     q = urllib.parse.urlencode({
@@ -40,7 +40,7 @@ def server_in_resources(resources: list[dict[str, Any]], machine_id: str) -> boo
 
 
 class PlexTV:
-    def __init__(self, client_id: str, product: str = "Soulbridge",
+    def __init__(self, client_id: str, product: str = "Soulscribe",
                  version: str = "", timeout: float = 15.0):
         self.client_id = client_id
         self.product = product

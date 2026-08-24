@@ -1,15 +1,15 @@
 <p align="center">
-  <img src="assets/logo.png" alt="Soulbridge" width="160">
+  <img src="assets/logo.png" alt="Soulscribe" width="160">
 </p>
 
-<h1 align="center">Soulbridge</h1>
+<h1 align="center">Soulscribe</h1>
 
 <p align="center">Request an audiobook, get it from Soulseek, filed and tagged for your library.</p>
 
 ---
 
-Soulbridge is a self-hosted **request platform for audiobooks**, the way Overseerr is for movies and
-TV. People browse and request titles in a clean web UI; Soulbridge finds the best copy on the
+Soulscribe is a self-hosted **request platform for audiobooks**, the way Overseerr is for movies and
+TV. People browse and request titles in a clean web UI; Soulscribe finds the best copy on the
 [Soulseek](https://www.slsknet.org/) network via [slskd](https://github.com/slskd/slskd), downloads
 it, organises it into `Author/Title`, and tags it from the Audible listing so it lands clean in
 **Plex**, **Jellyfin**, and **Audiobookshelf**.
@@ -25,7 +25,7 @@ of them, and nothing tied a proper request workflow to it.
 
 1. A user searches Audible from the **Request** page (or a request arrives from AudioBookRequest).
 2. Depending on their role the request is auto-fulfilled or held for admin approval.
-3. Soulbridge builds a clean Soulseek query, ranks the responses (format, size, free slot,
+3. Soulscribe builds a clean Soulseek query, ranks the responses (format, size, free slot,
    title/author match, narrator, edition, unabridged), and downloads the best one through slskd.
 4. When the download finishes it moves the files into `Author/Title`, tags them from the Audible
    metadata, and tells your media servers to scan the new folder.
@@ -56,7 +56,7 @@ of them, and nothing tied a proper request workflow to it.
   won't pull "The Alloy of Law" just because both share the series name. On import it warns about an
   obvious language or edition mismatch.
 - **Mismatch protection:** short, common titles no longer pull songs or the wrong author. After a
-  download, Soulbridge reads the file metadata and rejects music (by duration and genre) instead of
+  download, Soulscribe reads the file metadata and rejects music (by duration and genre) instead of
   filing it; users can also flag a completed request as the wrong content. Either way the bad
   upload is blocklisted and a different copy is tried.
 - **Self-organising:** files into `{author}/{title}` (configurable). No Readarr required.
@@ -95,12 +95,12 @@ of them, and nothing tied a proper request workflow to it.
 ## Quick start
 
 ```bash
-docker run -d --name soulbridge \
+docker run -d --name soulscribe \
   -p 8793:8793 \
   -e TZ=Australia/Brisbane \
   -v $PWD/config:/config \
   -v /path/to/data:/data \
-  ghcr.io/natrosity/soulbridge:latest
+  ghcr.io/natrosity/soulscribe:latest
 ```
 
 Open `http://localhost:8793`, create the first admin account, then go to **Server Settings** and
@@ -110,14 +110,14 @@ point it at slskd (and optionally AudioBookRequest, Plex, Jellyfin, Audiobookshe
 > Mount the same parent directory that holds both your slskd downloads and your audiobook library
 > (e.g. `/data`), so finished files move into place on one filesystem.
 
-**Going public?** Soulbridge is safe to put behind an HTTPS reverse proxy (auth is required on every
+**Going public?** Soulscribe is safe to put behind an HTTPS reverse proxy (auth is required on every
 route). Set `public_url` so the Plex sign-in redirect comes back over HTTPS, and set
-`SOULBRIDGE_SECURE_COOKIES=true` once all access is via that proxy.
+`SOULSCRIBE_SECURE_COOKIES=true` once all access is via that proxy.
 
 ## Configuration
 
-Everything is editable in the web UI. Environment variables (prefixed `SOULBRIDGE_`) seed the
-defaults on first run; `TZ` and `SOULBRIDGE_SECURE_COOKIES` are read directly.
+Everything is editable in the web UI. Environment variables (prefixed `SOULSCRIBE_`) seed the
+defaults on first run; `TZ` and `SOULSCRIBE_SECURE_COOKIES` are read directly.
 
 | Setting | Default | Notes |
 |---|---|---|
@@ -150,7 +150,7 @@ and the Audible catalog. Inspired by [Soularr](https://github.com/mrusse/soularr
 
 ## Disclaimer
 
-Soulbridge automates your own Soulseek client. You're responsible for complying with copyright law
+Soulscribe automates your own Soulseek client. You're responsible for complying with copyright law
 and the Soulseek terms of service where you live. Use it for content you're entitled to.
 
 ## License

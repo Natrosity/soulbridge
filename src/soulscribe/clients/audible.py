@@ -23,7 +23,7 @@ def product_url(asin: str, region: str = "us") -> str:
 class Audible:
     def __init__(self, region: str = "us", timeout: float = 20.0):
         self.base = f"https://api.audible.{DOMAINS.get(region, 'com')}/1.0/catalog/products"
-        self._c = httpx.Client(timeout=timeout, headers={"User-Agent": "soulbridge"})
+        self._c = httpx.Client(timeout=timeout, headers={"User-Agent": "soulscribe"})
 
     def close(self) -> None:
         self._c.close()

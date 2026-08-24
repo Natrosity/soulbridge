@@ -4,7 +4,7 @@ import sys
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
-from soulbridge.core import matching as m  # noqa: E402
+from soulscribe.core import matching as m  # noqa: E402
 
 PREFS = {"formats": ["m4b", "m4a", "mp3", "flac", "ogg"],
          "min_mb": 50, "max_mb": 4000, "require_free_slot": True}

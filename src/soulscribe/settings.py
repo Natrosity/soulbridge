@@ -1,12 +1,13 @@
 """Configuration schema. Settings live in the DB and are editable in the web UI;
-environment variables of the form SOULBRIDGE_<KEY> seed them on first run."""
+environment variables of the form SOULSCRIBE_<KEY> seed them on first run
+(the legacy SOULBRIDGE_<KEY> names are still honoured for upgraded installs)."""
 from __future__ import annotations
 
-import os
 from dataclasses import dataclass
 from typing import Any
 
 from . import db
+from .env import env
 
 
 @dataclass
@@ -27,7 +28,7 @@ SPEC: list[Field] = [
     Field("slskd_api_key", "slskd API key", "", "Soulseek", "password",
           help="From slskd.yml (web.authentication.api_keys)."),
     Field("slskd_downloads_path", "slskd downloads path", "/data/soulseek/complete", "Soulseek",
-          help="Where completed slskd downloads appear, as Soulbridge sees them."),
+          help="Where completed slskd downloads appear, as Soulscribe sees them."),
     # AudioBookRequest
     Field("abr_url", "AudioBookRequest URL", "http://audiobookrequest:8000", "AudioBookRequest",
           help="Base URL of your ABR instance. Leave blank to run search-only."),
@@ -40,7 +41,7 @@ SPEC: list[Field] = [
           help="Placeholders: {author} {title} {narrator}."),
     # Audiobookshelf scan (optional)
     Field("abs_url", "Audiobookshelf URL", "", "Audiobookshelf",
-          help="Optional. If set, Soulbridge triggers a library scan after import."),
+          help="Optional. If set, Soulscribe triggers a library scan after import."),
     Field("abs_api_key", "Audiobookshelf API token", "", "Audiobookshelf", "password"),
     Field("abs_library_id", "Audiobookshelf library id", "", "Audiobookshelf"),
     # Plex scan (optional) — Plex can scan just the new folder
@@ -99,9 +100,9 @@ SPEC: list[Field] = [
           options=("standard", "trusted")),
     Field("request_quota", "Request quota per user", "0", "Access", "number",
           help="Max open requests a non-admin may have. 0 = unlimited."),
-    Field("instance_name", "Instance name", "Soulbridge", "General"),
+    Field("instance_name", "Instance name", "Soulscribe", "General"),
     Field("public_url", "Public URL", "", "General",
-          help="External base URL users reach this at, e.g. https://soulbridge.example.com. "
+          help="External base URL users reach this at, e.g. https://soulscribe.example.com. "
                "Used to build the Plex sign-in redirect. Leave blank to infer from the request."),
 ]
 
@@ -114,13 +115,13 @@ def is_secret(key: str) -> bool:
 
 
 def seed_from_env() -> None:
-    """On first run, fill any unset settings from SOULBRIDGE_<KEY> env vars (or defaults)."""
+    """On first run, fill any unset settings from SOULSCRIBE_<KEY> env vars (or defaults)."""
     existing = db.all_settings()
     for f in SPEC:
         if f.key in existing:
             continue
-        env = os.environ.get("SOULBRIDGE_" + f.key.upper())
-        db.set_setting(f.key, env if env is not None else f.default)
+        seed = env(f.key.upper())
+        db.set_setting(f.key, seed if seed is not None else f.default)
 
 
 def get(key: str) -> str:
