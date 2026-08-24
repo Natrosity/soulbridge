@@ -10,6 +10,7 @@ import pytest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
+from soulscribe.core import library  # noqa: E402
 from soulscribe.web.routes import requests as r  # noqa: E402
 
 
@@ -71,8 +72,8 @@ def test_series_completion_finds_missing_books(monkeypatch):
         {"asin": "OWNED1", "title": "Mistborn", "author": "Brandon Sanderson",
          "series": "Mistborn"},
     ]
-    monkeypatch.setattr(r, "_library_sample", lambda: sample)
-    monkeypatch.setattr(r, "_library_index", lambda: ({"OWNED1"}, set()))
+    monkeypatch.setattr(library, "sample", lambda: sample)
+    monkeypatch.setattr(library, "index", lambda: ({"OWNED1"}, set()))
     sibs = [
         _book("OWNED1", "Mistborn", ["Brandon Sanderson"]),          # already owned -> filtered
         _book("MISSING1", "The Well of Ascension", ["Brandon Sanderson"]),
@@ -87,8 +88,8 @@ def test_series_completion_finds_missing_books(monkeypatch):
 
 def test_series_completion_empty_when_nothing_missing(monkeypatch):
     sample = [{"asin": "OWNED1", "title": "X", "author": "A", "series": "S"}]
-    monkeypatch.setattr(r, "_library_sample", lambda: sample)
-    monkeypatch.setattr(r, "_library_index", lambda: ({"OWNED1"}, set()))
+    monkeypatch.setattr(library, "sample", lambda: sample)
+    monkeypatch.setattr(library, "index", lambda: ({"OWNED1"}, set()))
     aud = FakeAudible(similar_by_asin={"OWNED1": [_book("OWNED1", "X", ["A"])]})
     assert r._series_completion_row(aud) == {}
 
@@ -96,8 +97,8 @@ def test_series_completion_empty_when_nothing_missing(monkeypatch):
 def test_series_completion_ignores_items_without_series_or_asin(monkeypatch):
     sample = [{"asin": None, "title": "No Asin", "author": "A", "series": "S"},
               {"asin": "X", "title": "No Series", "author": "A", "series": ""}]
-    monkeypatch.setattr(r, "_library_sample", lambda: sample)
-    monkeypatch.setattr(r, "_library_index", lambda: (set(), set()))
+    monkeypatch.setattr(library, "sample", lambda: sample)
+    monkeypatch.setattr(library, "index", lambda: (set(), set()))
     aud = FakeAudible()
     assert r._series_completion_row(aud) == {}
     assert aud.similar_calls == []          # no representative found -> no API call
@@ -106,8 +107,8 @@ def test_series_completion_ignores_items_without_series_or_asin(monkeypatch):
 def test_series_completion_caps_at_three_series(monkeypatch):
     sample = [{"asin": f"OWN{i}", "title": f"T{i}", "author": "A", "series": f"S{i}"}
              for i in range(5)]
-    monkeypatch.setattr(r, "_library_sample", lambda: sample)
-    monkeypatch.setattr(r, "_library_index", lambda: (set(sample[i]["asin"] for i in range(5)), set()))
+    monkeypatch.setattr(library, "sample", lambda: sample)
+    monkeypatch.setattr(library, "index", lambda: (set(sample[i]["asin"] for i in range(5)), set()))
     similar_by_asin = {f"OWN{i}": [_book(f"MISS{i}", f"Missing {i}", ["A"])] for i in range(5)}
     aud = FakeAudible(similar_by_asin=similar_by_asin)
     r._series_completion_row(aud)
@@ -117,8 +118,8 @@ def test_series_completion_caps_at_three_series(monkeypatch):
 # ------------------------------------------------------------- author heroes
 def test_author_hero_row_finds_new_books(monkeypatch):
     sample = [{"asin": "O1", "title": "Owned", "author": "Brandon Sanderson", "series": ""}]
-    monkeypatch.setattr(r, "_library_sample", lambda: sample)
-    monkeypatch.setattr(r, "_library_index", lambda: ({"O1"}, set()))
+    monkeypatch.setattr(library, "sample", lambda: sample)
+    monkeypatch.setattr(library, "index", lambda: ({"O1"}, set()))
     results = [_book("O1", "Owned", ["Brandon Sanderson"]),
               _book("NEW1", "Warbreaker", ["Brandon Sanderson"])]
     aud = FakeAudible(search_by_query={"Brandon Sanderson": results})
@@ -131,16 +132,16 @@ def test_author_hero_row_finds_new_books(monkeypatch):
 def test_author_hero_row_dedupes_authors_case_insensitively(monkeypatch):
     sample = [{"asin": "O1", "title": "A", "author": "Brandon Sanderson", "series": ""},
               {"asin": "O2", "title": "B", "author": "brandon sanderson", "series": ""}]
-    monkeypatch.setattr(r, "_library_sample", lambda: sample)
-    monkeypatch.setattr(r, "_library_index", lambda: (set(), set()))
+    monkeypatch.setattr(library, "sample", lambda: sample)
+    monkeypatch.setattr(library, "index", lambda: (set(), set()))
     aud = FakeAudible()
     r._author_hero_row(aud)
     assert aud.search_calls == ["Brandon Sanderson"]      # only queried once
 
 
 def test_author_hero_row_empty_with_no_authors(monkeypatch):
-    monkeypatch.setattr(r, "_library_sample", lambda: [])
-    monkeypatch.setattr(r, "_library_index", lambda: (set(), set()))
+    monkeypatch.setattr(library, "sample", lambda: [])
+    monkeypatch.setattr(library, "index", lambda: (set(), set()))
     aud = FakeAudible()
     assert r._author_hero_row(aud) == {}
 
@@ -149,8 +150,8 @@ def test_author_hero_row_empty_with_no_authors(monkeypatch):
 def test_similar_hero_row_seeds_from_most_recent_owned_book(monkeypatch):
     sample = [{"asin": None, "title": "No Asin", "author": "A", "series": ""},
               {"asin": "SEED", "title": "Dark Matter", "author": "Blake Crouch", "series": ""}]
-    monkeypatch.setattr(r, "_library_sample", lambda: sample)
-    monkeypatch.setattr(r, "_library_index", lambda: ({"SEED"}, set()))
+    monkeypatch.setattr(library, "sample", lambda: sample)
+    monkeypatch.setattr(library, "index", lambda: ({"SEED"}, set()))
     aud = FakeAudible(similar_by_asin={"SEED": [_book("SIM1", "Recursion", ["Blake Crouch"])]})
     row = r._similar_hero_row(aud)
     assert row["label"] == "Because you have Dark Matter"
@@ -159,7 +160,7 @@ def test_similar_hero_row_seeds_from_most_recent_owned_book(monkeypatch):
 
 
 def test_similar_hero_row_empty_with_no_asin_in_library(monkeypatch):
-    monkeypatch.setattr(r, "_library_sample", lambda: [{"asin": None, "title": "X"}])
+    monkeypatch.setattr(library, "sample", lambda: [{"asin": None, "title": "X"}])
     assert r._similar_hero_row(FakeAudible()) == {}
 
 

@@ -229,3 +229,116 @@ def test_settings_save_bad_number_is_ignored(app_ctx):
     app_ctx.post("/settings", data={"weight_coverage_floor": "not-a-number",
                                     "instance_name": "T", "csrf": csrf}, follow_redirects=False)
     assert settings.get_float("weight_coverage_floor") == 0.55     # untouched, not zeroed
+
+
+# --------------------------------------------------------- Phase 8: follows
+def _make_standard(client, admin_user, admin_pass, username="reader", password="readerpass1"):
+    """Create a standard user via the admin API (must already be logged in as admin)."""
+    csrf = _csrf(client, "/users")
+    client.post("/users", data={"username": username, "password": password,
+                                "role": "standard", "csrf": csrf}, follow_redirects=False)
+    return username, password
+
+
+def test_follows_page_available_to_standard_user(app_ctx):
+    au, ap = _make_admin(app_ctx)
+    _login(app_ctx, au, ap)
+    su, sp = _make_standard(app_ctx, au, ap)
+    app_ctx.post("/logout", data={"csrf": _csrf(app_ctx, "/account")}, follow_redirects=False)
+    _login(app_ctx, su, sp)
+    r = app_ctx.get("/follows")
+    assert r.status_code == 200
+    assert "You're not following anyone yet" in r.text
+
+
+def test_create_and_list_follow(app_ctx):
+    u, p = _make_admin(app_ctx)
+    _login(app_ctx, u, p)
+    csrf = _csrf(app_ctx, "/follows")
+    r = app_ctx.post("/follows", data={"kind": "author", "name": "Brandon Sanderson",
+                                       "csrf": csrf}, follow_redirects=False)
+    assert r.status_code == 303
+    r = app_ctx.get("/follows")
+    assert "Brandon Sanderson" in r.text
+    assert "Author" in r.text
+
+
+def test_series_follow_requires_ref_asin(app_ctx):
+    u, p = _make_admin(app_ctx)
+    _login(app_ctx, u, p)
+    csrf = _csrf(app_ctx, "/follows")
+    r = app_ctx.post("/follows", data={"kind": "series", "name": "Mistborn", "csrf": csrf})
+    assert r.status_code == 400
+
+
+def test_follow_search_marks_already_followed(app_ctx, monkeypatch):
+    from soulscribe.clients.audible import Audible
+    u, p = _make_admin(app_ctx)
+    _login(app_ctx, u, p)
+    csrf = _csrf(app_ctx, "/follows")
+    app_ctx.post("/follows", data={"kind": "author", "name": "Brandon Sanderson", "csrf": csrf})
+
+    monkeypatch.setattr(Audible, "search", lambda self, *a, **k: [
+        {"asin": "X1", "title": "Mistborn", "subtitle": None,
+         "authors": ["Brandon Sanderson"], "narrators": [], "series": None,
+         "cover": None, "year": None, "release_date": None, "runtime_min": None},
+    ])
+    r = app_ctx.post("/follows/search", data={"q": "mistborn", "csrf": csrf})
+    assert r.status_code == 200
+    assert "Following Brandon Sanderson" in r.text
+    assert "Follow Brandon Sanderson" not in r.text
+
+
+def test_unfollow_by_owner(app_ctx):
+    u, p = _make_admin(app_ctx)
+    _login(app_ctx, u, p)
+    csrf = _csrf(app_ctx, "/follows")
+    app_ctx.post("/follows", data={"kind": "author", "name": "X", "csrf": csrf})
+    from soulscribe import db
+    fid = db.list_follows(u)[0]["id"]
+    r = app_ctx.post(f"/follows/{fid}/delete", data={"csrf": csrf}, follow_redirects=False)
+    assert r.status_code == 303
+    assert db.get_follow(fid) is None
+
+
+def test_cannot_unfollow_someone_elses_follow(app_ctx):
+    au, ap = _make_admin(app_ctx)
+    _login(app_ctx, au, ap)
+    csrf = _csrf(app_ctx, "/follows")
+    app_ctx.post("/follows", data={"kind": "author", "name": "X", "csrf": csrf})
+    from soulscribe import db
+    fid = db.list_follows(au)[0]["id"]
+
+    su, sp = _make_standard(app_ctx, au, ap)
+    app_ctx.post("/logout", data={"csrf": _csrf(app_ctx, "/account")}, follow_redirects=False)
+    _login(app_ctx, su, sp)
+    csrf2 = _csrf(app_ctx, "/follows")
+    r = app_ctx.post(f"/follows/{fid}/delete", data={"csrf": csrf2})
+    assert r.status_code == 403
+    assert db.get_follow(fid) is not None            # untouched
+
+
+def test_admin_can_unfollow_anyones_follow(app_ctx):
+    au, ap = _make_admin(app_ctx)
+    _login(app_ctx, au, ap)
+    su, sp = _make_standard(app_ctx, au, ap)
+    app_ctx.post("/logout", data={"csrf": _csrf(app_ctx, "/account")}, follow_redirects=False)
+    _login(app_ctx, su, sp)
+    csrf = _csrf(app_ctx, "/follows")
+    app_ctx.post("/follows", data={"kind": "author", "name": "X", "csrf": csrf})
+    from soulscribe import db
+    fid = db.list_follows(su)[0]["id"]
+    app_ctx.post("/logout", data={"csrf": _csrf(app_ctx, "/account")}, follow_redirects=False)
+
+    _login(app_ctx, au, ap)
+    csrf2 = _csrf(app_ctx, "/follows")
+    r = app_ctx.post(f"/follows/{fid}/delete", data={"csrf": csrf2}, follow_redirects=False)
+    assert r.status_code == 303
+    assert db.get_follow(fid) is None
+
+
+def test_follow_csrf_required(app_ctx):
+    u, p = _make_admin(app_ctx)
+    _login(app_ctx, u, p)
+    r = app_ctx.post("/follows", data={"kind": "author", "name": "X"})
+    assert r.status_code == 403

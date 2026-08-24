@@ -16,6 +16,7 @@
   <nav>
     <a href="/discover">Request</a>
     <a href="/requests">My&nbsp;Requests</a>
+    <a href="/follows">Follows</a>
     {% if library_available %}<a href="/library">Library</a>{% endif %}
     {% if is_admin %}<a href="/">Dashboard</a><a href="/requests/all" class="navcount">Requests{% if pending_approvals %}<span class="navbadge">{{ pending_approvals }}</span>{% endif %}</a><a href="/search">Search</a><a href="/tags">Tags</a>{% endif %}
   </nav>

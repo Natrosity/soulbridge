@@ -79,6 +79,78 @@ def test_init_is_idempotent():
         assert _user_version(path) == len(db.MIGRATIONS)
 
 
+def test_legacy_db_gains_follows_table_and_follow_id_column():
+    """A DB from before migration 2 (no follows table, no items.follow_id)
+    should gain both without losing existing data."""
+    with tempfile.TemporaryDirectory() as d:
+        path = os.path.join(d, "pre_follows.db")
+        con = sqlite3.connect(path)
+        con.executescript(
+            "CREATE TABLE items (id INTEGER PRIMARY KEY, title TEXT NOT NULL,"
+            " status TEXT NOT NULL DEFAULT 'pending', created_at TEXT NOT NULL DEFAULT '',"
+            " updated_at TEXT NOT NULL DEFAULT '');"
+            "INSERT INTO items(title) VALUES ('Old Book');"
+            "PRAGMA user_version = 1;"                    # already past migration 1
+        )
+        con.commit()
+        con.close()
+
+        _with_db(path, db.init)
+
+        cols = _cols(path, "items")
+        assert "follow_id" in cols
+        con = sqlite3.connect(path)
+        try:
+            tables = {r[0] for r in con.execute("SELECT name FROM sqlite_master WHERE type='table'")}
+            assert "follows" in tables
+            assert con.execute("SELECT title FROM items").fetchone()[0] == "Old Book"
+        finally:
+            con.close()
+        assert _user_version(path) == len(db.MIGRATIONS)
+
+
+def test_hours_since():
+    assert db.hours_since(None) == float("inf")
+    assert db.hours_since("") == float("inf")
+    assert db.hours_since("not-a-timestamp") == float("inf")
+    just_now = db.now()
+    assert db.hours_since(just_now) < 0.01
+    from datetime import datetime, timedelta
+    six_hours_ago = (datetime.strptime(just_now, "%Y-%m-%dT%H:%M:%S")
+                     - timedelta(hours=6)).strftime("%Y-%m-%dT%H:%M:%S")
+    assert 5.9 < db.hours_since(six_hours_ago) < 6.1
+
+
+def test_follow_crud():
+    with tempfile.TemporaryDirectory() as d:
+        path = os.path.join(d, "follows.db")
+
+        def run():
+            db.init()
+            fid = db.create_follow("author", "Brandon Sanderson", "alice")
+            assert db.create_follow("author", "Brandon Sanderson", "alice") == fid  # idempotent
+
+            f = db.get_follow(fid)
+            assert f["kind"] == "author" and f["name"] == "Brandon Sanderson"
+            assert f["created_by"] == "alice" and f["last_checked_at"] is None
+
+            # a different user following the same author gets a separate row
+            fid2 = db.create_follow("author", "Brandon Sanderson", "bob")
+            assert fid2 != fid
+
+            assert {f["id"] for f in db.list_follows("alice")} == {fid}
+            assert {f["id"] for f in db.list_follows()} == {fid, fid2}
+
+            db.touch_follow(fid)
+            assert db.get_follow(fid)["last_checked_at"] is not None
+
+            db.delete_follow(fid)
+            assert db.get_follow(fid) is None
+            assert db.get_follow(fid2) is not None
+
+        _with_db(path, run)
+
+
 if __name__ == "__main__":
     for name, fn in sorted(globals().items()):
         if name.startswith("test_") and callable(fn):

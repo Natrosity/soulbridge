@@ -13,9 +13,9 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 from ... import cache, db, settings
 from ...clients import notify
 from ...clients.abr import ABR
-from ...clients.abs import ABS, library_key
+from ...clients.abs import library_key
 from ...clients.audible import Audible, product_url
-from ...core import auth, worker
+from ...core import auth, library, worker
 from ..common import SEARCH_CACHE, csrf_protect, ctx, require_admin, templates
 
 router = APIRouter()
@@ -41,44 +41,11 @@ def _quota_message(user: dict[str, Any]) -> Optional[str]:
 
 
 # ------------------------------------------------------------- discovery aids
-_LIB_INDEX = cache.TTLCache(300)                # "lib" -> (asins, keys), 5 min
-_LIB_SAMPLE = cache.TTLCache(300)                # "sample" -> recent library items, 5 min
 _BROWSE = cache.TTLCache(6 * 3600)              # Audible sort -> browse items, 6h
 _OWNED_HEROES = cache.TTLCache(6 * 3600)        # "series"|"authors"|"similar" -> a hero row, 6h
 # (row label, Audible sort, which releases to show: 'released' | 'upcoming')
 HERO_ROWS = (("Bestsellers", "BestSellers", "released"),
              ("Releasing Soon", "-ReleaseDate", "upcoming"))
-
-
-def _library_index() -> tuple[set, set]:
-    """(asins, title|surname keys) of the ABS library, cached for 5 min."""
-    url, key, lib = settings.get("abs_url"), settings.get("abs_api_key"), settings.get("abs_library_id")
-    if not (url and key and lib):
-        return set(), set()
-    hit = _LIB_INDEX.get("lib")
-    if hit is not None:
-        return hit
-    a = ABS(url, key)
-    asins, keys = a.library_index(lib)
-    a.close()
-    _LIB_INDEX.set("lib", (asins, keys))
-    return asins, keys
-
-
-def _library_sample(limit: int = 40) -> list[dict[str, Any]]:
-    """A recent slice of the ABS library (title/author/series/asin per item) —
-    seeds the 'owned-library' discovery hero rows. Cached like the library index."""
-    url, key, lib = settings.get("abs_url"), settings.get("abs_api_key"), settings.get("abs_library_id")
-    if not (url and key and lib):
-        return []
-    hit = _LIB_SAMPLE.get("sample")
-    if hit is not None:
-        return hit
-    a = ABS(url, key)
-    items, _total = a.library_items(lib, limit=limit, sort="addedAt", desc=True)
-    a.close()
-    _LIB_SAMPLE.set("sample", items)
-    return items
 
 
 def _not_owned(candidates: list[dict[str, Any]], asins: set, keys: set,
@@ -102,11 +69,11 @@ def _series_completion_row(aud: Audible) -> dict[str, Any]:
     """'Complete the series' — for a few series you own at least one book of,
     find what you're missing via Audible's own series graph (InTheSameSeries)."""
     by_series: dict[str, dict[str, Any]] = {}
-    for it in _library_sample():
+    for it in library.sample():
         s = (it.get("series") or "").strip()
         if s and it.get("asin") and s not in by_series:
             by_series[s] = it            # first hit = most recently added in that series
-    asins, keys = _library_index()
+    asins, keys = library.index()
     missing: list[dict[str, Any]] = []
     seen: set = set()
     for series_name, rep in list(by_series.items())[:3]:      # cap Audible calls
@@ -127,14 +94,14 @@ def _author_hero_row(aud: Audible) -> dict[str, Any]:
     in your library, skipping what you already own or have requested."""
     authors: list[str] = []
     seen_authors: set = set()
-    for it in _library_sample():
+    for it in library.sample():
         a = (it.get("author") or "").strip()
         if a and a.lower() not in seen_authors:
             seen_authors.add(a.lower())
             authors.append(a)
         if len(authors) >= 3:
             break
-    asins, keys = _library_index()
+    asins, keys = library.index()
     picks: list[dict[str, Any]] = []
     seen: set = set()
     for author in authors:
@@ -150,10 +117,10 @@ def _author_hero_row(aud: Audible) -> dict[str, Any]:
 def _similar_hero_row(aud: Audible) -> dict[str, Any]:
     """'Because you have X' — Audible's raw-similarity graph seeded from one
     recently-added library book."""
-    rep = next((it for it in _library_sample() if it.get("asin")), None)
+    rep = next((it for it in library.sample() if it.get("asin")), None)
     if not rep:
         return {}
-    asins, keys = _library_index()
+    asins, keys = library.index()
     picks = _not_owned(aud.similar(rep["asin"], "RawSimilarities", num=12), asins, keys, set())
     if not picks:
         return {}
@@ -187,7 +154,7 @@ def _mark_results(results: list[dict[str, Any]]) -> None:
     """Flag each discover listing with its prior-request status, whether the book is
     already in the Audiobookshelf library (so we don't allow a duplicate), whether
     it's still upcoming, and its Audible page URL."""
-    asins, keys = _library_index()
+    asins, keys = library.index()
     today = db.today()
     region = settings.get("audible_region") or "us"
     for r in results:
