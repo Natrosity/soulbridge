@@ -8,7 +8,6 @@ import os
 import re
 import shutil
 import threading
-import time
 from typing import Any, Optional
 
 from .. import cache, db, settings
