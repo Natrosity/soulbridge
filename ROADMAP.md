@@ -104,6 +104,149 @@ and audited, because the app becomes internet-facing.
 
 ---
 
+# Next epoch — Soulscribe as an audiobook management suite
+
+All six original phases are done; Soulscribe has met and outgrown its founding
+goal. The next epoch turns it from a request-and-fulfil pipeline into a
+Soulseek-first audiobook **management suite**: tunable matching, multi-source
+acquisition (Prowlarr), real library management (leaving Audiobookshelf as
+delivery only), and discovery that knows what you actually want next. Full
+audit + rationale: see the 2026-08-24 audit (kept as project history, not
+duplicated here).
+
+## Locked decisions for this epoch
+
+- **Sequencing:** Phase 0 (hardening) → Phase 7 (tunable matching) → Phase 8
+  (discovery Tier 1 + follows) → Phase 9 (multi-source acquisition) →
+  Phase 10 (library management + discovery Tier 2). The two load-bearing
+  design decisions — the provider/downloader abstraction (Phase 9) and the
+  `books`/`editions` data model (Phase 10) — come with enough of the rest
+  built first that they can be done right instead of fast.
+- **eBooks are out of scope.** Audiobooks only, for now.
+- **New account creation:** allow public UI sign-up (for non-Plex users),
+  landing as `awaiting_admin_approval` — an admin must approve before the
+  account can log in. Keeps the "no open signup without a gate" posture
+  Sign-in-with-Plex already has, without requiring Plex.
+- **Prometheus `/metrics`:** admin-gated or token-gated (not public) — decide
+  the exact exposure in Phase 0 hardening's admin-path work, so it doesn't
+  leak operational detail (queue depth, connected services) to the internet.
+
+## Phase 0 — Foundation hardening  *(done — v0.15.x)*
+
+Not user-facing; makes every later phase in this epoch cheaper and safer.
+
+- Rebrand Soulbridge → Soulscribe (repo, package, image, UI) with backward
+  compatible `SOULBRIDGE_*` env vars and DB filename for the upgraded
+  instance.
+- CI test gate: `pytest` runs on every PR and gates the Docker build/publish.
+- `PRAGMA user_version` migration framework in `db.py`, replacing ad-hoc
+  column checks — future schema work (Phase 10's `books`/`editions` tables)
+  appends a migration instead of touching `init()`.
+- Unified `cache.TTLCache` — the five scattered module-dict caches
+  (`_RESULTS_CACHE`, `_SEARCH_CACHE`, `_PLEX_PENDING`, `_LIB_INDEX`,
+  `_BROWSE`) now share one implementation; single-process assumption
+  documented in the module docstring.
+- `server.py` split from 977 lines into `web/common.py` + `web/routes/*`
+  (auth, users, dashboard, manual, requests, library, settings_routes),
+  behaviour-preserved and verified by a new route/auth characterisation
+  test suite (`tests/test_routes.py`).
+
+## Phase 7 — Tunable matching
+
+- Promote `score_group()`'s hard-coded weights and keyword lists (`SPAM`,
+  `DRAMATIZED`, `MUSIC_DIRS`, `AUDIOBOOK_MARKERS`) into a "Matching" settings
+  group, defaulted to today's values. Curated presets (Balanced / Prefer
+  single M4B / Prefer highest bitrate / Lenient) so tuning doesn't require
+  understanding the point values.
+- Score breakdown surfaced in the interactive candidate picker (`{reason:
+  points}`) so a weight change has visible cause and effect.
+- "Test against last search" preview on the settings page: re-rank the most
+  recent cached Soulseek responses with pending (unsaved) weights.
+- Guardrail: hard rejects (coverage floor, SPAM, blocklist, size bounds) stay
+  rejects regardless of user-set weights; editable weights are range-clamped.
+
+## Phase 8 — Discovery Tier 1 + follows
+
+- **Series completion** hero row: cross-reference the ABS library against
+  series membership (via Audible's `sims?similarity_type=InTheSameSeries` /
+  `NextInSameSeries` and the `relationships` response group) and surface
+  "Complete the series — you're missing books 3 & 4." Ships against today's
+  schema; no taste model needed.
+- "More from authors you own" (`ByTheSameAuthor`) and "Because you have X"
+  (`RawSimilarities`) hero rows, reusing `_mark_results()`.
+- **Author/series follow → auto-request new releases**, gated by role same as
+  any other request (approval for `standard`, auto for `trusted`/`admin`).
+- Requester-visible download progress (%, not just status) on My Requests,
+  sourced from slskd/download-client transfer state.
+- Generalise the existing "Wrong book?" mismatch button into "Try a different
+  source" — retry against the next-best candidate without blocklisting
+  (mismatch blocklisting stays for actually-wrong content).
+- Wishlist / "notify when available": a `no_results`-parked book can opt into
+  periodic low-frequency re-search instead of staying terminally parked,
+  notifying when it's finally found — properly integrated with the existing
+  `scheduled`/pre-save flow rather than a separate concept.
+
+## Phase 9 — Multi-source acquisition (Prowlarr, qBittorrent, SABnzbd)
+
+- Provider/downloader abstraction: `Indexer.search(...) → [Candidate]` and
+  `Downloader.enqueue/state/completed_path`. Refactor the Soulseek path as the
+  first implementation (`SoulseekProvider` wrapping `slskd` + `matching.py`)
+  to prove the abstraction without changing behaviour.
+- `ProwlarrProvider` (Torznab, category 3030/Audio-Audiobook) +
+  `QbittorrentDownloader` / `SabnzbdDownloader`.
+- Per-provider scorers on a comparable scale (`score_release()` for Torznab,
+  reusing the title/author/edition/book-number helpers already in
+  `matching.py`, plus seeders/freeleech/size) and a source-preference policy
+  setting (Soulseek-first / Prowlarr-first / best-score-wins /
+  Prowlarr-for-edition-upgrades).
+- `items.provider` + `items.download_client` columns; interactive picker
+  shows candidates from all sources with a source badge.
+- Scope discipline: Soulscribe queries Prowlarr and hands off to download
+  clients — it does not manage indexer definitions, RSS sync, or release
+  profiles (Prowlarr already does that).
+
+## Phase 10 — Library management + Discovery Tier 2
+
+The keystone phase: split the `items` table's conflation of "a request" from
+"a book in the library."
+
+- New `books` table (canonical work: title, author, series + position, wanted
+  edition, owned edition, monitored flag, cutoff state, library path) and an
+  `editions` model (narrator, year, format, abridged/dramatised, ASIN) —
+  persisting what `build_editions`/`pick_edition` already compute today.
+  `items`/requests become acquisitions against a book.
+- Metadata profiles (allowed languages, format preference, abridged/
+  dramatised policy) turning the existing detection primitives (`DRAMATIZED`,
+  `_LANG_MARKERS`) into configurable intent instead of per-grab surprise.
+- In-UI metadata editing + re-tag/refresh-from-Audnexus on demand.
+- Edition tracking + quality/edition upgrade logic ("cutoff met?" — replace a
+  64kbps MP3 pile with a single M4B when a better copy appears).
+- File organisation beyond the folder: chaptered naming, multi-part
+  (`Part 1/2/3`) safeguards — the deferred v0.11.0 rename work, now properly
+  scoped against real edition/part data.
+- ABS write-back: document + default to ABS trusting local metadata (embedded
+  tags + local metadata file) so Soulscribe is the metadata authority and ABS
+  is a pure renderer — the "ABS as delivery only" goal.
+- **Discovery Tier 2**: personalised recommendations from request history +
+  ABS library (and ABS listening/progress data where available), ranking
+  `sims` candidates against a lightweight taste profile. Every recommendation
+  carries an explainable reason chip.
+- Bulk admin operations (approve-all, retry-all-failed, re-tag-all-in-series)
+  — trivial once routes are router-split and this data model exists.
+
+## Also planned (not yet phased)
+
+- **Public account sign-up** with admin-approval gate (see locked decisions
+  above), alongside the existing Sign-in-with-Plex path.
+- **OIDC / forward-auth support** (SWAG/Authelia/Tailscale-style headers),
+  revisiting the "no 2FA yet" note from Phase 5 now that there's a second
+  external-identity path.
+- **Prometheus `/metrics`** — queue depth, success rate, worker health;
+  exposure gating decided in Phase 0's admin-path hardening.
+- **CHANGELOG.md**, split out from this status log, tied to release tags.
+
+---
+
 ## Status log
 
 - 2026-08-22: plan agreed; Phase 1 started.
@@ -203,3 +346,20 @@ and audited, because the app becomes internet-facing.
   (candidates/pick/auto); no XSS (`|safe`-free, autoescape on); no secrets in logs; strict
   CSP. Hardening added: opt-in Secure session cookies (`SOULSCRIBE_SECURE_COOKIES`) and
   constant-time login for unknown usernames. No HIGH/MEDIUM findings.
+- 2026-08-24: Codebase audit — architecture/hygiene review plus scoping for the four
+  requested next-epoch features (tunable matching, Prowlarr multi-source, library
+  management, smart discovery) and eight additional proposals. Verdict: strong
+  foundation, four features are the right move, sequencing matters (provider
+  abstraction and the books/editions data model are the two load-bearing decisions).
+  Next-epoch plan written up above as Phases 7–10.
+- 2026-08-24: Rebrand Soulbridge → Soulscribe (v0.15.0) — new quill-and-book identity;
+  package, repo (`Natrosity/soulbridge` → `Natrosity/soulscribe`), image, and all UI/docs
+  renamed. Backward compatible: `SOULSCRIBE_*` env vars fall back to legacy
+  `SOULBRIDGE_*`, and an existing `soulbridge.db` keeps being used in place rather than
+  stranding it.
+- 2026-08-24: Phase 0 (foundation hardening) complete — CI now runs `pytest` on every PR
+  and gates the Docker build; `db.init()` migrated from ad-hoc column checks to a
+  `PRAGMA user_version` migration framework; five scattered module-dict caches unified
+  into `cache.TTLCache`; `server.py` split from 977 lines into `web/common.py` +
+  `web/routes/*`, verified behaviour-preserving by a new route/auth characterisation
+  suite (`tests/test_routes.py`). Sets up Phases 7–10 to be built on a steadier base.
