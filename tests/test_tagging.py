@@ -4,7 +4,7 @@ import sys
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
-from soulbridge.core.tagging import decide, decide_field  # noqa: E402
+from soulscribe.core.tagging import decide, decide_field  # noqa: E402
 
 
 def test_fills_empty():

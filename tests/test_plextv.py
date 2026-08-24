@@ -6,7 +6,7 @@ import urllib.parse
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
-from soulbridge.clients import plextv as p  # noqa: E402
+from soulscribe.clients import plextv as p  # noqa: E402
 
 MACHINE = "abc123servermachineid"
 
@@ -19,7 +19,7 @@ def test_auth_url_carries_params_in_fragment():
     assert q["clientID"] == ["cid-xyz"]
     assert q["code"] == ["PINCODE"]
     assert q["forwardUrl"] == ["https://sb.example.com/auth/plex/callback?state=s1"]
-    assert q["context[device][product]"] == ["Soulbridge"]
+    assert q["context[device][product]"] == ["Soulscribe"]
 
 
 def test_member_when_server_owned():

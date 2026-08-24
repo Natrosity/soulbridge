@@ -11,7 +11,6 @@ Security model (Phase 1):
 from __future__ import annotations
 
 import json
-import os
 import time
 import uuid
 from pathlib import Path
@@ -25,6 +24,7 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.middleware.sessions import SessionMiddleware
 
 from .. import __version__, db, settings
+from ..env import env
 from ..clients import notify, plextv
 from ..clients.abr import ABR
 from ..clients.abs import ABS, library_key
@@ -90,14 +90,14 @@ class Guard(BaseHTTPMiddleware):
         return resp
 
 
-app = FastAPI(title="Soulbridge", version=__version__)
+app = FastAPI(title="Soulscribe", version=__version__)
 app.mount("/static", StaticFiles(directory=str(HERE / "static")), name="static")
 app.add_middleware(Guard)
 # Mark the session cookie Secure when serving strictly over HTTPS. Off by default
 # because the container also publishes plain-http :8793 for direct LAN access (a
-# Secure cookie wouldn't be sent there); set SOULBRIDGE_SECURE_COOKIES=true once
+# Secure cookie wouldn't be sent there); set SOULSCRIBE_SECURE_COOKIES=true once
 # all access is via the HTTPS reverse proxy.
-_SECURE_COOKIES = os.environ.get("SOULBRIDGE_SECURE_COOKIES", "").strip().lower() in (
+_SECURE_COOKIES = (env("SECURE_COOKIES", "") or "").strip().lower() in (
     "1", "true", "yes", "on")
 app.add_middleware(SessionMiddleware, secret_key=auth.get_secret(), same_site="lax",
                    https_only=_SECURE_COOKIES, max_age=14 * 24 * 3600)
@@ -144,7 +144,7 @@ def _ctx(request: Request, **extra: Any) -> dict[str, Any]:
     user = getattr(request.state, "user", None)
     ctx = {
         "request": request, "version": __version__,
-        "instance": settings.get("instance_name") or "Soulbridge",
+        "instance": settings.get("instance_name") or "Soulscribe",
         "wstatus": worker.STATUS, "badges": STATUS_BADGES, "status_labels": STATUS_LABELS,
         "library_available": bool(settings.get("abs_url") and settings.get("abs_api_key")
                                   and settings.get("abs_library_id")),
@@ -253,7 +253,7 @@ def _unique_username(base: str) -> str:
 
 
 def _plex_provision(acct: dict[str, Any]) -> dict[str, Any]:
-    """Find the Soulbridge user for a verified Plex account (match by plex_id only —
+    """Find the Soulscribe user for a verified Plex account (match by plex_id only —
     never by name, so a matching username can't hijack an internal account), creating
     one at the default role on first sign-in."""
     existing = db.get_user_by_plex_id(acct["id"])
@@ -549,7 +549,7 @@ def item_deny(request: Request, item_id: int):
 _IMPORT_MSGS = {
     "none": ("warn", "AudioBookRequest isn't configured, so there's nothing to import."),
     "error": ("err", "Import failed — check the AudioBookRequest connection."),
-    "0": ("ok", "Nothing new to import — Soulbridge is already up to date."),
+    "0": ("ok", "Nothing new to import — Soulscribe is already up to date."),
 }
 
 
@@ -577,7 +577,7 @@ def blocklist_remove(request: Request, block_id: int):
 
 @app.post("/requests/import-abr", dependencies=[Depends(csrf_protect)])
 def import_abr(request: Request):
-    """One-off cutover aid: pull existing AudioBookRequest history into Soulbridge so
+    """One-off cutover aid: pull existing AudioBookRequest history into Soulscribe so
     past requests survive after ABR is retired. New books only (upsert dedupes);
     already-fulfilled ABR requests come in as 'done', the rest as 'pending'."""
     _require_admin(request)
@@ -967,7 +967,7 @@ async def save_settings(request: Request):
 @app.get("/api/status")
 def api_status():
     return JSONResponse({
-        "service": "soulbridge", "version": __version__,
+        "service": "soulscribe", "version": __version__,
         "worker": worker.STATUS, "counts": db.counts_by_status(),
     })
 
