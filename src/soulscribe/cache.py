@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import threading
 import time
-from typing import Any, Callable, Optional
+from typing import Any, Callable
 
 _MISSING = object()
 
