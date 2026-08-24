@@ -134,20 +134,36 @@ def _now() -> str:
     return now()
 
 
+def _migration_1(c: sqlite3.Connection) -> None:
+    """Baseline: columns that were added incrementally before schema versioning
+    existed. Idempotent — a fresh DB already has them from SCHEMA, and an old DB
+    gets them added here."""
+    cols = {r["name"] for r in c.execute("PRAGMA table_info(items)")}
+    if "attempts" not in cols:
+        c.execute("ALTER TABLE items ADD COLUMN attempts INTEGER NOT NULL DEFAULT 0")
+    if "mode" not in cols:
+        c.execute("ALTER TABLE items ADD COLUMN mode TEXT NOT NULL DEFAULT 'auto'")
+    if "release_date" not in cols:
+        c.execute("ALTER TABLE items ADD COLUMN release_date TEXT")
+    if "note" not in cols:
+        c.execute("ALTER TABLE items ADD COLUMN note TEXT")
+
+
+# Ordered migrations. Each entry's 1-based position is the schema version it
+# brings the database to; append new ones, never renumber. Applied in order for
+# any DB whose PRAGMA user_version is below that position.
+MIGRATIONS = [_migration_1]
+
+
 def init() -> None:
     os.makedirs(CONFIG_DIR, exist_ok=True)
     with connect() as c:
         c.executescript(SCHEMA)
-        # lightweight migrations for existing databases
-        cols = {r["name"] for r in c.execute("PRAGMA table_info(items)")}
-        if "attempts" not in cols:
-            c.execute("ALTER TABLE items ADD COLUMN attempts INTEGER NOT NULL DEFAULT 0")
-        if "mode" not in cols:
-            c.execute("ALTER TABLE items ADD COLUMN mode TEXT NOT NULL DEFAULT 'auto'")
-        if "release_date" not in cols:
-            c.execute("ALTER TABLE items ADD COLUMN release_date TEXT")
-        if "note" not in cols:
-            c.execute("ALTER TABLE items ADD COLUMN note TEXT")
+        version = c.execute("PRAGMA user_version").fetchone()[0]
+        for i, migrate in enumerate(MIGRATIONS, start=1):
+            if version < i:
+                migrate(c)
+                c.execute(f"PRAGMA user_version = {i}")   # i is a trusted int
 
 
 @contextmanager

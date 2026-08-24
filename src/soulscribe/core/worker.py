@@ -11,7 +11,7 @@ import threading
 import time
 from typing import Any, Optional
 
-from .. import db, settings
+from .. import cache, db, settings
 from ..clients import audnexus, notify
 from ..clients.abr import ABR
 from ..clients.abs import ABS
@@ -71,7 +71,7 @@ def _find_local(basename: str, root: str) -> Optional[str]:
 
 
 # ---------- public actions ----------
-_RESULTS_CACHE: dict[str, tuple[float, list]] = {}      # asin -> (ts, Audible results)
+_RESULTS_CACHE = cache.TTLCache(86400)      # asin -> Audible results (1 day)
 
 
 def _search_results(item: dict[str, Any]) -> list[dict[str, Any]]:
@@ -80,9 +80,9 @@ def _search_results(item: dict[str, Any]) -> list[dict[str, Any]]:
     asin = item.get("source_id")
     if item.get("source") not in ("abr", "user") or not asin:
         return []
-    cached = _RESULTS_CACHE.get(asin)
-    if cached and time.time() - cached[0] < 86400:
-        return cached[1]
+    hit = _RESULTS_CACHE.get(asin)
+    if hit is not None:
+        return hit
     aud = Audible(settings.get("audible_region") or "us")
     try:
         results = aud.search(item.get("title") or "", num=40)
@@ -90,7 +90,7 @@ def _search_results(item: dict[str, Any]) -> list[dict[str, Any]]:
         results = []
     finally:
         aud.close()
-    _RESULTS_CACHE[asin] = (time.time(), results)
+    _RESULTS_CACHE.set(asin, results)
     return results
 
 
