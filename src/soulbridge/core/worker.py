@@ -388,6 +388,7 @@ def _resolve_edition(item: dict[str, Any], target_meta: dict[str, Any],
     # from the file's own title/genre and keep its real title rather than relabelling.
     blob = matching.norm(" ".join([
         item.get("slskd_dir") or "", tags["title"], tags["album"], tags["genre"],
+        tags["composer"],                         # e.g. narrator = "Full Cast"
         " ".join(json.loads(item.get("chosen_files") or "[]")),
     ]))
     if not any(m in matching.norm(item["title"]) for m in matching.DRAMATIZED) \

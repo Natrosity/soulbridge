@@ -133,6 +133,11 @@ and audited, because the app becomes internet-facing.
 - 2026-08-23: Phase 6 complete (v0.10.0) — Apprise notifications (request/complete/
   failure + test button; new `apprise` dep → image rebuild), ABR history import,
   cutover-ready. All six phases shipped; ABR retirement is now an operator choice.
+- 2026-08-24: Broader dramatised detection (v0.14.2) — added foreign/extra markers to
+  `matching.DRAMATIZED` (Hörspiel, dramatizada, dramatisée, vollvertont, dramatization…) and folded
+  the narrator tag into the check, so Red Rising's "[Dramatized Adaptation] / Full Cast" and Fourth
+  Wing's German "Das Hörspiel" dramatised editions are recognised. Verified against both series'
+  real Audible listings.
 - 2026-08-24: Dramatised/Graphic Audio edition flagging (v0.14.1) — the Audible catalog API doesn't
   return Graphic Audio editions (verified: even "mistborn graphic audio" returns only the standard
   listing), so they can't be found by lookup. Instead the post-download check now recognises a

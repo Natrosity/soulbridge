@@ -11,9 +11,12 @@ from typing import Any, Optional
 AUDIO_EXTS = (".m4b", ".m4a", ".mp3", ".flac", ".ogg", ".opus")
 SPAM = ("sample", "summary", "workbook", "analysis of", "study guide", "abridged")
 STOP = {"the", "a", "an", "of", "and", "to", "in", "my", "is", "for"}
-# markers of a dramatised / full-cast edition (normalised form, no punctuation)
-DRAMATIZED = ("full cast", "dramatized", "dramatised", "multicast", "multi cast",
-              "graphic audio", "graphicaudio", "radio drama", "audio drama")
+# markers of a dramatised / full-cast edition (normalised form, no punctuation;
+# includes German/Spanish/French terms since those editions are common)
+DRAMATIZED = ("full cast", "fullcast", "dramatized", "dramatised", "dramatization",
+              "dramatisation", "multicast", "multi cast", "graphic audio", "graphicaudio",
+              "radio drama", "audio drama", "horspiel", "dramatizada", "dramatizado",
+              "dramatisee", "vollvertont")
 # path/context signals to tell an audiobook from music or other audio
 AUDIOBOOK_DIRS = {"audiobook", "audiobooks", "audible", "hoerbuch", "horbuch", "hoerbucher"}
 AUDIOBOOK_MARKERS = ("unabridged", "audiobook", "narrated", "read by", "narrator")
