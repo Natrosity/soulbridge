@@ -1,6 +1,6 @@
 [project]
 name = "soulscribe"
-version = "0.16.1"
+version = "0.17.0"
 description = "A self-hosted request platform for audiobooks: browse and request titles, and Soulscribe fetches, organises, and tags them from Soulseek (via slskd). Can also fulfil AudioBookRequest / *arr requests."
 readme = "README.md"
 requires-python = ">=3.11"

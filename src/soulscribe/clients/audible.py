@@ -28,17 +28,8 @@ class Audible:
     def close(self) -> None:
         self._c.close()
 
-    def _products(self, params: dict[str, Any]) -> list[dict[str, Any]]:
-        base = {"response_groups": RESPONSE_GROUPS, "image_sizes": "500",
-                "content_type": "Product"}
-        base.update(params)
-        try:
-            r = self._c.get(self.base, params=base)
-            if r.status_code >= 400:
-                return []
-            products = r.json().get("products", [])
-        except Exception:
-            return []
+    @staticmethod
+    def _normalize(products: list[dict[str, Any]]) -> list[dict[str, Any]]:
         out = []
         for p in products:
             title = p.get("title")
@@ -60,6 +51,19 @@ class Audible:
             })
         return out
 
+    def _products(self, params: dict[str, Any]) -> list[dict[str, Any]]:
+        base = {"response_groups": RESPONSE_GROUPS, "image_sizes": "500",
+                "content_type": "Product"}
+        base.update(params)
+        try:
+            r = self._c.get(self.base, params=base)
+            if r.status_code >= 400:
+                return []
+            products = r.json().get("products", [])
+        except Exception:
+            return []
+        return self._normalize(products)
+
     def search(self, keywords: str, num: int = 24) -> list[dict[str, Any]]:
         return self._products({"keywords": keywords, "num_results": min(max(num, 1), 40),
                                "products_sort_by": "Relevance"})
@@ -68,3 +72,21 @@ class Audible:
         """Keyword-less catalog browse for the discovery 'hero' rows.
         sort_by: 'BestSellers' (popular) or '-ReleaseDate' (new & upcoming)."""
         return self._products({"num_results": min(max(num, 1), 40), "products_sort_by": sort_by})
+
+    def similar(self, asin: str, similarity_type: str = "RawSimilarities",
+               num: int = 12) -> list[dict[str, Any]]:
+        """Books related to `asin` on Audible's own similarity graph — used for
+        discovery hero rows. similarity_type: InTheSameSeries, NextInSameSeries,
+        ByTheSameAuthor, ByTheSameNarrator, or RawSimilarities."""
+        if not asin:
+            return []
+        params = {"response_groups": RESPONSE_GROUPS, "image_sizes": "500",
+                  "similarity_type": similarity_type, "num_results": min(max(num, 1), 20)}
+        try:
+            r = self._c.get(f"{self.base}/{asin}/sims", params=params)
+            if r.status_code >= 400:
+                return []
+            products = r.json().get("similar_products", [])
+        except Exception:
+            return []
+        return self._normalize(products)
