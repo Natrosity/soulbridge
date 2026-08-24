@@ -151,7 +151,7 @@ Not user-facing; makes every later phase in this epoch cheaper and safer.
   behaviour-preserved and verified by a new route/auth characterisation
   test suite (`tests/test_routes.py`).
 
-## Phase 7 — Tunable matching
+## Phase 7 — Tunable matching  *(core done — v0.16.1)*
 
 - Promote `score_group()`'s hard-coded weights and keyword lists (`SPAM`,
   `DRAMATIZED`, `MUSIC_DIRS`, `AUDIOBOOK_MARKERS`) into a "Matching" settings
@@ -160,10 +160,13 @@ Not user-facing; makes every later phase in this epoch cheaper and safer.
   understanding the point values.
 - Score breakdown surfaced in the interactive candidate picker (`{reason:
   points}`) so a weight change has visible cause and effect.
-- "Test against last search" preview on the settings page: re-rank the most
-  recent cached Soulseek responses with pending (unsaved) weights.
 - Guardrail: hard rejects (coverage floor, SPAM, blocklist, size bounds) stay
   rejects regardless of user-set weights; editable weights are range-clamped.
+- **Deferred (future): "test against last search" preview** on the settings
+  page — re-rank the most recent cached Soulseek responses with pending
+  (unsaved) weights before saving. Not yet built; the score-breakdown UI
+  covers the "why did this score X" need for now, so this is a nice-to-have
+  rather than a gap.
 
 ## Phase 8 — Discovery Tier 1 + follows
 
@@ -363,3 +366,16 @@ The keystone phase: split the `items` table's conflation of "a request" from
   into `cache.TTLCache`; `server.py` split from 977 lines into `web/common.py` +
   `web/routes/*`, verified behaviour-preserving by a new route/auth characterisation
   suite (`tests/test_routes.py`). Sets up Phases 7–10 to be built on a steadier base.
+- 2026-08-24: Phase 7 core (v0.16.0) — `score_group()`'s ~20 weights and four keyword
+  lists are now settings-backed (`weight_*`/`keyword_*`, a new "Matching" settings group)
+  instead of hard-coded, with four curated presets and server-side range clamping.
+  Behaviour is unchanged until a setting is edited (all pre-existing matching tests pass
+  untouched). Caught a real bug live in a browser — `bitrate_cap`'s default wasn't a
+  multiple of its own HTML `step`, so native constraint validation silently blocked the
+  whole settings form from submitting; fixed, with a permanent regression test.
+- 2026-08-24: Phase 7 breakdown UI (v0.16.1) — `score_group()` gained an `explain` param;
+  `worker.manual_search` now attaches a `{label, points}` breakdown to every candidate,
+  shown as a native `<details>` disclosure on the score in `/search` and the interactive
+  candidate picker (no custom JS). Verified live by monkeypatching `manual_search` and
+  driving `/search` in a real browser (no slskd available locally). "Test against last
+  search" preview remains deferred (see Phase 7 above).
