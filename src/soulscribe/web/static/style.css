@@ -139,6 +139,20 @@ table.results td.match { max-width: 340px; overflow: hidden; text-overflow: elli
 table.results td.score { font-variant-numeric: tabular-nums; color: var(--muted); }
 tr.rejected { opacity: 0.5; }
 
+.breakdown summary { cursor: pointer; list-style: none; color: var(--text); font-variant-numeric: tabular-nums; }
+.breakdown summary::-webkit-details-marker { display: none; }
+.breakdown summary::before { content: "▸ "; color: var(--muted); font-size: 10px; }
+.breakdown[open] summary::before { content: "▾ "; }
+.breaklist {
+  list-style: none; margin: 8px 0 0; padding: 8px 0 0; font-size: 11px; color: var(--muted);
+  text-align: left; white-space: normal; min-width: 200px; border-top: 1px solid var(--line);
+}
+.breaklist li { display: flex; justify-content: space-between; gap: 12px; padding: 2px 0; }
+.breaklist .pts { font-variant-numeric: tabular-nums; }
+.breaklist .pts.pos { color: var(--ok); }
+.breaklist .pts.neg { color: var(--err); }
+.breaklist li.reject { color: var(--err); font-weight: 500; }
+
 .settingsform fieldset { border: 1px solid var(--line); border-radius: var(--radius); margin: 0 0 16px; padding: 8px 16px 16px; }
 .settingsform legend { padding: 0 8px; color: var(--accent2); font-weight: 600; }
 .presetbar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 10px 0 4px; }

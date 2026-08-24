@@ -131,9 +131,12 @@ def manual_search(title: str, author: str = "",
                 break
         groups = [g for g in matching.group_responses(responses)
                   if (g.username, g.directory) not in blocked]
+        scored: list[tuple[Any, list]] = []
         for g in groups:
-            g.score = matching.score_group(g, title, author, prefs, edition, siblings)
-        ranked = sorted(groups, key=lambda g: g.score, reverse=True)
+            explain: list = []
+            g.score = matching.score_group(g, title, author, prefs, edition, siblings, explain=explain)
+            scored.append((g, explain))
+        scored.sort(key=lambda pair: pair[0].score, reverse=True)
         return [
             {
                 "username": g.username, "directory": g.directory, "label": g.label,
@@ -141,9 +144,9 @@ def manual_search(title: str, author: str = "",
                 "files": len(g.files), "exts": sorted(e[1:] for e in g.exts),
                 "bitrate": round(matching.avg_bitrate(g.files)) or None,
                 "score": round(g.score, 1), "acceptable": g.score > 0,
-                "file_list": g.files,
+                "file_list": g.files, "breakdown": explain,
             }
-            for g in ranked[:25]
+            for g, explain in scored[:25]
         ]
     finally:
         sk.close()
